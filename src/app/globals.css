@@ -2,7 +2,7 @@
 
 :root {
   --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-manrope: 'Manrope', sans-serif;
+  --font-google-sans: 'Google Sans', 'Product Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 
   --bg-global: #070708;
@@ -25,7 +25,7 @@ body {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-manrope), sans-serif;
+  font-family: var(--font-google-sans), sans-serif;
   letter-spacing: -0.025em;
   font-weight: 520;
 }

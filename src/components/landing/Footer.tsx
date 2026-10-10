@@ -14,9 +14,10 @@ export function Footer({ onOpenDocs }: FooterProps) {
       <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between gap-10">
         {/* Left Column: Brand & Copyright */}
         <div className="space-y-4 max-w-sm">
-          <div
+          <button
             onClick={() => navigate('/')}
-            className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 transition-opacity"
+            className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5E6BFF] rounded-[4px] p-0.5 text-left"
+            aria-label="PENGUIN TRACE - Return to Homepage"
           >
             <div className="w-8 h-8 rounded-[4px] bg-[#101112] border border-[#232426] flex items-center justify-center p-1">
               <TuxLogo size={22} />
@@ -24,7 +25,7 @@ export function Footer({ onOpenDocs }: FooterProps) {
             <span className="text-xs font-semibold text-[#F0F1F2] tracking-tight uppercase font-mono">
               PENGUIN TRACE
             </span>
-          </div>
+          </button>
 
           <p className="text-xs text-[#9A9DA3] leading-relaxed">
             Deterministic Web3 file provenance and cryptographic integrity verification on Monad.

@@ -27,7 +27,7 @@ body {
   padding: 0;
   background-color: #070708;
   color: #F0F1F2;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Google Sans', 'Product Sans', 'Open Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   letter-spacing: -0.011em;
   min-height: 100vh;
   overflow-x: hidden;
@@ -46,9 +46,9 @@ body {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Manrope', -apple-system, sans-serif;
-  letter-spacing: -0.03em;
-  font-weight: 520;
+  font-family: 'Google Sans', 'Product Sans', 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: -0.025em;
+  font-weight: 550;
 }
 
 code, pre, .font-mono, [data-mono] {
