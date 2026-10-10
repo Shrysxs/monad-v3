@@ -6,14 +6,13 @@ import {
   Check,
   X,
   AlertTriangle,
-  ArrowRight,
   Upload,
   Search,
   Copy,
   CheckCheck,
   ExternalLink,
-  Layers,
   Info,
+  RefreshCw,
 } from "lucide-react";
 import {
   compareArtifacts,
@@ -36,7 +35,7 @@ import {
 import { LineageTimeline } from "./LineageTimeline";
 
 export function VariantComparator() {
-  const [mode, setMode] = useState<"live" | "demo">("demo");
+  const [mode, setMode] = useState<"demo" | "live">("demo");
   const [fixtures, setFixtures] = useState<DemoFixtureItem[]>([]);
   const [comparison, setComparison] = useState<ReleaseDnaComparison | null>(null);
 
@@ -272,6 +271,12 @@ export function VariantComparator() {
     }
   }
 
+  function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
   return (
     <div className="space-y-6">
       {/* Mode Selector Tabs */}
@@ -282,10 +287,10 @@ export function VariantComparator() {
             setMode("demo");
             applyPreset("same-name-different-hash");
           }}
-          className={`px-4 py-2 text-xs font-semibold rounded-t-md transition-colors ${
+          className={`px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all ${
             mode === "demo"
-              ? "bg-white text-neutral-900 border-t border-x border-neutral-200"
-              : "text-neutral-500 hover:text-neutral-900"
+              ? "bg-neutral-950 text-white shadow-sm"
+              : "text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100"
           }`}
         >
           Sample forensic comparisons
@@ -297,10 +302,10 @@ export function VariantComparator() {
             setMode("live");
             setComparison(null);
           }}
-          className={`px-4 py-2 text-xs font-semibold rounded-t-md transition-colors ${
+          className={`px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all ${
             mode === "live"
-              ? "bg-white text-neutral-900 border-t border-x border-neutral-200"
-              : "text-neutral-500 hover:text-neutral-900"
+              ? "bg-neutral-950 text-white shadow-sm"
+              : "text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100"
           }`}
         >
           Live on-chain lookup
@@ -309,21 +314,21 @@ export function VariantComparator() {
 
       {/* Preset selector for demo mode */}
       {mode === "demo" && (
-        <div className="p-3.5 rounded-lg border border-neutral-200 bg-neutral-50 space-y-2">
+        <div className="p-4 rounded-xl border border-neutral-200 bg-neutral-50 space-y-2.5 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-neutral-900">
-              Sample scenarios (Demo data):
+            <span className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider">
+              Sample Forensic Scenarios (Demo Data):
             </span>
           </div>
 
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => applyPreset("same-name-different-hash")}
-              className={`px-2.5 py-1 rounded text-xs transition-colors ${
+              className={`px-3 py-1.5 rounded text-xs transition-all ${
                 activePreset === "same-name-different-hash"
-                  ? "bg-black text-white font-medium"
-                  : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-100"
+                  ? "bg-neutral-950 text-white font-medium shadow-sm"
+                  : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-100 hover:text-neutral-950"
               }`}
             >
               Same name, different hash (Untrusted repack)
@@ -332,10 +337,10 @@ export function VariantComparator() {
             <button
               type="button"
               onClick={() => applyPreset("bit-rot-tampered")}
-              className={`px-2.5 py-1 rounded text-xs transition-colors ${
+              className={`px-3 py-1.5 rounded text-xs transition-all ${
                 activePreset === "bit-rot-tampered"
-                  ? "bg-black text-white font-medium"
-                  : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-100"
+                  ? "bg-neutral-950 text-white font-medium shadow-sm"
+                  : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-100 hover:text-neutral-950"
               }`}
             >
               1-piece modification (Chunk diff)
@@ -344,10 +349,10 @@ export function VariantComparator() {
             <button
               type="button"
               onClick={() => applyPreset("revoked-evolution")}
-              className={`px-2.5 py-1 rounded text-xs transition-colors ${
+              className={`px-3 py-1.5 rounded text-xs transition-all ${
                 activePreset === "revoked-evolution"
-                  ? "bg-black text-white font-medium"
-                  : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-100"
+                  ? "bg-neutral-950 text-white font-medium shadow-sm"
+                  : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-100 hover:text-neutral-950"
               }`}
             >
               Version evolution &amp; revocation
@@ -356,10 +361,10 @@ export function VariantComparator() {
             <button
               type="button"
               onClick={() => applyPreset("exact-match")}
-              className={`px-2.5 py-1 rounded text-xs transition-colors ${
+              className={`px-3 py-1.5 rounded text-xs transition-all ${
                 activePreset === "exact-match"
-                  ? "bg-black text-white font-medium"
-                  : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-100"
+                  ? "bg-neutral-950 text-white font-medium shadow-sm"
+                  : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-100 hover:text-neutral-950"
               }`}
             >
               Exact mirror match
@@ -372,20 +377,20 @@ export function VariantComparator() {
       {mode === "live" && (
         <form onSubmit={handleCompareLiveArtifacts} className="space-y-6">
           {/* Empty State Banner explaining registry is newly deployed */}
-          <div className="p-4 rounded-lg bg-neutral-50 border border-neutral-200 text-xs space-y-2">
-            <div className="font-semibold text-neutral-900 flex items-center space-x-1.5">
-              <Info className="w-4 h-4 text-neutral-500" />
-              <span>Monad Testnet registry status</span>
+          <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 text-xs space-y-2 shadow-sm">
+            <div className="font-bold text-neutral-950 flex items-center space-x-2 font-mono uppercase tracking-wider">
+              <Info className="w-4 h-4 text-neutral-700" />
+              <span>Monad Testnet Registry Status</span>
             </div>
             <p className="text-neutral-600 leading-relaxed">
-              The live contract at <code className="text-neutral-900 font-mono">{registryAddress.slice(0, 10)}...{registryAddress.slice(-6)}</code> currently has no public release records registered. You can query custom hashes below, or{" "}
+              The live contract at <code className="text-neutral-950 font-mono bg-neutral-200/60 px-1.5 py-0.5 rounded">{registryAddress.slice(0, 10)}...{registryAddress.slice(-6)}</code> currently has no public release records registered. You can query custom hashes below, or{" "}
               <button
                 type="button"
                 onClick={() => {
                   setMode("demo");
                   applyPreset("same-name-different-hash");
                 }}
-                className="text-neutral-900 font-semibold underline hover:no-underline"
+                className="text-neutral-950 font-bold underline hover:no-underline"
               >
                 load sample data to preview comparison forensics
               </button>.
@@ -394,14 +399,14 @@ export function VariantComparator() {
 
           <div className="grid md:grid-cols-2 gap-6">
             {/* Artifact A */}
-            <div className="rounded-lg border border-neutral-200 bg-white p-5 space-y-3">
-              <div className="text-xs font-semibold text-neutral-900 uppercase tracking-wider">
+            <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-4 shadow-sm">
+              <div className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider">
                 Artifact A (Candidate)
               </div>
 
-              <div className="space-y-2 text-xs">
+              <div className="space-y-3 text-xs">
                 <div>
-                  <label className="text-neutral-600 block mb-1">Local file:</label>
+                  <label className="text-neutral-700 font-medium block mb-1">Local file:</label>
                   <input
                     type="file"
                     onChange={(e) => setInputAFile(e.target.files?.[0] || null)}
@@ -410,38 +415,38 @@ export function VariantComparator() {
                 </div>
 
                 <div>
-                  <label className="text-neutral-600 block mb-1">Or SHA-256 / Release digest:</label>
+                  <label className="text-neutral-700 font-medium block mb-1">Or SHA-256 / Release digest:</label>
                   <input
                     type="text"
                     placeholder="0x... or 64-char hex"
                     value={inputAHashOrDigest}
                     onChange={(e) => setInputAHashOrDigest(e.target.value)}
-                    className="w-full rounded bg-white border border-neutral-200 px-3 py-1.5 font-mono text-xs text-neutral-900 focus:outline-none focus:border-neutral-900"
+                    className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-xs text-neutral-950 focus:outline-none focus:border-neutral-950"
                   />
                 </div>
 
                 <div>
-                  <label className="text-neutral-600 block mb-1">Signed manifest JSON (Optional):</label>
+                  <label className="text-neutral-700 font-medium block mb-1">Signed manifest JSON (Optional):</label>
                   <textarea
                     rows={2}
                     placeholder="Paste manifest JSON..."
                     value={inputAManifestText}
                     onChange={(e) => setInputAManifestText(e.target.value)}
-                    className="w-full rounded bg-white border border-neutral-200 p-2 font-mono text-[11px] text-neutral-900 focus:outline-none focus:border-neutral-900 resize-none"
+                    className="w-full rounded-md bg-white border border-neutral-200 p-2 font-mono text-[11px] text-neutral-950 focus:outline-none focus:border-neutral-950 resize-none"
                   />
                 </div>
               </div>
             </div>
 
             {/* Artifact B */}
-            <div className="rounded-lg border border-neutral-200 bg-white p-5 space-y-3">
-              <div className="text-xs font-semibold text-neutral-900 uppercase tracking-wider">
+            <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-4 shadow-sm">
+              <div className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider">
                 Artifact B (Reference)
               </div>
 
-              <div className="space-y-2 text-xs">
+              <div className="space-y-3 text-xs">
                 <div>
-                  <label className="text-neutral-600 block mb-1">Local file:</label>
+                  <label className="text-neutral-700 font-medium block mb-1">Local file:</label>
                   <input
                     type="file"
                     onChange={(e) => setInputBFile(e.target.files?.[0] || null)}
@@ -450,24 +455,24 @@ export function VariantComparator() {
                 </div>
 
                 <div>
-                  <label className="text-neutral-600 block mb-1">Or SHA-256 / Release digest:</label>
+                  <label className="text-neutral-700 font-medium block mb-1">Or SHA-256 / Release digest:</label>
                   <input
                     type="text"
                     placeholder="0x... or 64-char hex"
                     value={inputBHashOrDigest}
                     onChange={(e) => setInputBHashOrDigest(e.target.value)}
-                    className="w-full rounded bg-white border border-neutral-200 px-3 py-1.5 font-mono text-xs text-neutral-900 focus:outline-none focus:border-neutral-900"
+                    className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-xs text-neutral-950 focus:outline-none focus:border-neutral-950"
                   />
                 </div>
 
                 <div>
-                  <label className="text-neutral-600 block mb-1">Signed manifest JSON (Optional):</label>
+                  <label className="text-neutral-700 font-medium block mb-1">Signed manifest JSON (Optional):</label>
                   <textarea
                     rows={2}
                     placeholder="Paste manifest JSON..."
                     value={inputBManifestText}
                     onChange={(e) => setInputBManifestText(e.target.value)}
-                    className="w-full rounded bg-white border border-neutral-200 p-2 font-mono text-[11px] text-neutral-900 focus:outline-none focus:border-neutral-900 resize-none"
+                    className="w-full rounded-md bg-white border border-neutral-200 p-2 font-mono text-[11px] text-neutral-950 focus:outline-none focus:border-neutral-950 resize-none"
                   />
                 </div>
               </div>
@@ -478,14 +483,21 @@ export function VariantComparator() {
             <button
               type="submit"
               disabled={isProcessingLive}
-              className="px-6 py-2.5 rounded-md bg-black text-white hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 font-medium text-xs transition-colors flex items-center space-x-2"
+              className="px-6 py-2.5 rounded-lg bg-neutral-950 text-white hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 font-semibold text-xs transition-all shadow-sm flex items-center space-x-2"
             >
-              <span>{isProcessingLive ? "Comparing..." : "Compare artifacts"}</span>
+              {isProcessingLive ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Comparing artifacts...</span>
+                </>
+              ) : (
+                <span>Compare artifacts</span>
+              )}
             </button>
           </div>
 
           {liveErrorMessage && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-900 text-xs flex items-center space-x-2">
+            <div className="p-3.5 rounded-lg bg-red-50 border border-red-300 text-red-950 text-xs flex items-center space-x-2">
               <X className="w-4 h-4 text-red-700 shrink-0" />
               <span>{liveErrorMessage}</span>
             </div>
@@ -493,40 +505,42 @@ export function VariantComparator() {
         </form>
       )}
 
-      {/* Artifact Profiles */}
+      {/* Side-by-Side Artifact Profiles */}
       {artifactA && artifactB && (
         <div className="grid md:grid-cols-2 gap-6">
           {/* Card A */}
-          <div className="rounded-lg border border-neutral-200 bg-white p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs uppercase tracking-wider text-neutral-500 font-semibold font-mono">
+          <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-3.5 shadow-sm">
+            <div className="flex items-center justify-between border-b border-neutral-100 pb-2.5">
+              <span className="text-xs uppercase tracking-wider text-neutral-500 font-mono font-bold">
                 Artifact A (Candidate)
               </span>
               <div className="flex items-center space-x-1.5">
                 {artifactA.isDemo && (
-                  <span className="text-[10px] bg-neutral-100 text-neutral-600 px-2 py-0.5 rounded border border-neutral-200">
+                  <span className="text-[10px] bg-neutral-100 text-neutral-700 px-2 py-0.5 rounded border border-neutral-200 font-mono">
                     Demo data
                   </span>
                 )}
-                <span className="text-[10px] bg-neutral-100 text-neutral-800 px-2 py-0.5 rounded border border-neutral-200 font-mono">
+                <span className="text-[10px] bg-neutral-950 text-white px-2 py-0.5 rounded font-mono font-medium">
                   {artifactA.releaseRecord?.status ?? "UNKNOWN"}
                 </span>
               </div>
             </div>
 
-            <div className="space-y-1.5 text-xs">
-              <div className="font-semibold text-neutral-900 truncate">{artifactA.fileName}</div>
-              <div className="text-neutral-600">Size: {artifactA.fileSize.toLocaleString()} bytes</div>
-              <div className="text-neutral-600 truncate">
-                Publisher: <span className="text-neutral-900 font-medium">{artifactA.manifest?.publisherId ?? "Unregistered"}</span>
+            <div className="space-y-2 text-xs">
+              <div className="font-bold text-neutral-950 text-sm truncate">{artifactA.fileName}</div>
+              <div className="text-neutral-600">
+                Size: <span className="text-neutral-950 font-medium">{formatBytes(artifactA.fileSize)}</span>
               </div>
-              <div className="flex items-center justify-between p-2 rounded bg-neutral-50 border border-neutral-200 font-mono text-[11px] gap-2">
+              <div className="text-neutral-600 truncate">
+                Publisher: <span className="text-neutral-950 font-semibold">{artifactA.manifest?.publisherId ?? "Unregistered"}</span>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded bg-neutral-50 border border-neutral-200 font-mono text-[11px] gap-2">
                 <span className="truncate text-neutral-800">SHA: {artifactA.sha256}</span>
                 <button
                   type="button"
                   onClick={() => copyText("artA", artifactA.sha256)}
-                  className="text-neutral-400 hover:text-neutral-900 shrink-0 p-0.5"
-                  title="Copy hash"
+                  className="text-neutral-400 hover:text-neutral-950 shrink-0 p-0.5"
+                  title="Copy SHA-256 hash"
                 >
                   {copiedKey === "artA" ? <CheckCheck className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
@@ -535,36 +549,38 @@ export function VariantComparator() {
           </div>
 
           {/* Card B */}
-          <div className="rounded-lg border border-neutral-200 bg-white p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs uppercase tracking-wider text-neutral-500 font-semibold font-mono">
+          <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-3.5 shadow-sm">
+            <div className="flex items-center justify-between border-b border-neutral-100 pb-2.5">
+              <span className="text-xs uppercase tracking-wider text-neutral-500 font-mono font-bold">
                 Artifact B (Reference)
               </span>
               <div className="flex items-center space-x-1.5">
                 {artifactB.isDemo && (
-                  <span className="text-[10px] bg-neutral-100 text-neutral-600 px-2 py-0.5 rounded border border-neutral-200">
+                  <span className="text-[10px] bg-neutral-100 text-neutral-700 px-2 py-0.5 rounded border border-neutral-200 font-mono">
                     Demo data
                   </span>
                 )}
-                <span className="text-[10px] bg-neutral-100 text-neutral-800 px-2 py-0.5 rounded border border-neutral-200 font-mono">
+                <span className="text-[10px] bg-neutral-950 text-white px-2 py-0.5 rounded font-mono font-medium">
                   {artifactB.releaseRecord?.status ?? "UNKNOWN"}
                 </span>
               </div>
             </div>
 
-            <div className="space-y-1.5 text-xs">
-              <div className="font-semibold text-neutral-900 truncate">{artifactB.fileName}</div>
-              <div className="text-neutral-600">Size: {artifactB.fileSize.toLocaleString()} bytes</div>
-              <div className="text-neutral-600 truncate">
-                Publisher: <span className="text-neutral-900 font-medium">{artifactB.manifest?.publisherId ?? "Unregistered"}</span>
+            <div className="space-y-2 text-xs">
+              <div className="font-bold text-neutral-950 text-sm truncate">{artifactB.fileName}</div>
+              <div className="text-neutral-600">
+                Size: <span className="text-neutral-950 font-medium">{formatBytes(artifactB.fileSize)}</span>
               </div>
-              <div className="flex items-center justify-between p-2 rounded bg-neutral-50 border border-neutral-200 font-mono text-[11px] gap-2">
+              <div className="text-neutral-600 truncate">
+                Publisher: <span className="text-neutral-950 font-semibold">{artifactB.manifest?.publisherId ?? "Unregistered"}</span>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded bg-neutral-50 border border-neutral-200 font-mono text-[11px] gap-2">
                 <span className="truncate text-neutral-800">SHA: {artifactB.sha256}</span>
                 <button
                   type="button"
                   onClick={() => copyText("artB", artifactB.sha256)}
-                  className="text-neutral-400 hover:text-neutral-900 shrink-0 p-0.5"
-                  title="Copy hash"
+                  className="text-neutral-400 hover:text-neutral-950 shrink-0 p-0.5"
+                  title="Copy SHA-256 hash"
                 >
                   {copiedKey === "artB" ? <CheckCheck className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
@@ -574,68 +590,78 @@ export function VariantComparator() {
         </div>
       )}
 
-      {/* Comparison results */}
+      {/* Comparison Results */}
       {comparison && (
-        <div className="space-y-6">
-          <div className="p-5 rounded-lg border border-neutral-200 bg-white space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-xs uppercase tracking-wider text-neutral-500 font-semibold">
-                  Forensic relationship
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="p-6 rounded-xl border border-neutral-200 bg-white space-y-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-1">
+                <span className="text-xs uppercase tracking-wider text-neutral-500 font-mono font-bold">
+                  Forensic Relationship
                 </span>
-                <h3 className="text-base font-bold text-neutral-900">{comparison.verdictTitle}</h3>
+                <h3 className="text-lg font-bold text-neutral-950">{comparison.verdictTitle}</h3>
               </div>
-              <span className="px-2.5 py-0.5 rounded text-[11px] font-mono font-medium bg-neutral-100 text-neutral-800 border border-neutral-200">
+              <span className="px-3 py-1 rounded text-xs font-mono font-bold bg-neutral-950 text-white shadow-sm">
                 {comparison.relationship}
               </span>
             </div>
 
-            <p className="text-xs text-neutral-600 leading-relaxed">{comparison.explanation}</p>
+            <p className="text-xs sm:text-sm text-neutral-700 leading-relaxed font-medium">
+              {comparison.explanation}
+            </p>
 
-            {/* Comparison Metrics Table */}
-            <div className="pt-3 border-t border-neutral-100 space-y-4">
+            {/* Comparison Metrics Tables */}
+            <div className="pt-4 border-t border-neutral-200 space-y-4">
               <div>
-                <h5 className="text-xs font-semibold text-neutral-900 uppercase tracking-wider mb-2">
-                  On-chain commitments &amp; status
+                <h5 className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider mb-2">
+                  Section 1: Monad Testnet On-Chain Commitments
                 </h5>
-                <div className="rounded border border-neutral-200 overflow-hidden">
+                <div className="rounded-lg border border-neutral-200 overflow-hidden shadow-sm">
                   <table className="w-full text-xs text-left">
-                    <thead className="bg-neutral-50 border-b border-neutral-200 text-neutral-600">
+                    <thead className="bg-neutral-50 border-b border-neutral-200 text-neutral-700">
                       <tr>
-                        <th className="py-2 px-3 font-semibold">Property</th>
-                        <th className="py-2 px-3 font-semibold">Artifact A</th>
-                        <th className="py-2 px-3 font-semibold">Artifact B</th>
-                        <th className="py-2 px-3 font-semibold text-right">Evaluation</th>
+                        <th className="py-2.5 px-3 font-semibold">Registry Property</th>
+                        <th className="py-2.5 px-3 font-semibold">Artifact A</th>
+                        <th className="py-2.5 px-3 font-semibold">Artifact B</th>
+                        <th className="py-2.5 px-3 font-semibold text-right">Evaluation</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-neutral-100 text-neutral-800">
+                    <tbody className="divide-y divide-neutral-100 text-neutral-900">
                       <tr>
-                        <td className="py-2 px-3 text-neutral-500">Registry status</td>
-                        <td className="py-2 px-3 font-mono">{comparison.diff.statusA}</td>
-                        <td className="py-2 px-3 font-mono">{comparison.diff.statusB}</td>
-                        <td className="py-2 px-3 text-right">
+                        <td className="py-2.5 px-3 text-neutral-500">Registry status</td>
+                        <td className="py-2.5 px-3 font-mono font-semibold">{comparison.diff.statusA}</td>
+                        <td className="py-2.5 px-3 font-mono font-semibold">{comparison.diff.statusB}</td>
+                        <td className="py-2.5 px-3 text-right">
                           {comparison.diff.statusA === "REVOKED" || comparison.diff.statusB === "REVOKED" ? (
-                            <span className="text-red-700 font-medium">Revocation present</span>
+                            <span className="text-red-800 font-semibold bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                              Revocation Present
+                            </span>
                           ) : comparison.diff.statusA === "ACTIVE" && comparison.diff.statusB === "ACTIVE" ? (
-                            <span className="text-emerald-700 font-medium">Both active</span>
+                            <span className="text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                              Both Active
+                            </span>
                           ) : (
-                            <span className="text-neutral-500">Status verified</span>
+                            <span className="text-neutral-600 bg-neutral-100 px-2 py-0.5 rounded">Status Verified</span>
                           )}
                         </td>
                       </tr>
                       <tr>
-                        <td className="py-2 px-3 text-neutral-500">Publisher identity</td>
-                        <td className="py-2 px-3 truncate max-w-[140px]">
+                        <td className="py-2.5 px-3 text-neutral-500">Publisher identity</td>
+                        <td className="py-2.5 px-3 truncate max-w-[140px]">
                           {artifactA?.manifest?.publisherId ?? "Unregistered"}
                         </td>
-                        <td className="py-2 px-3 truncate max-w-[140px]">
+                        <td className="py-2.5 px-3 truncate max-w-[140px]">
                           {artifactB?.manifest?.publisherId ?? "Unregistered"}
                         </td>
-                        <td className="py-2 px-3 text-right">
+                        <td className="py-2.5 px-3 text-right">
                           {comparison.diff.publisherMatch ? (
-                            <span className="text-emerald-700 font-medium">Identical publisher</span>
+                            <span className="text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                              Identical Publisher
+                            </span>
                           ) : (
-                            <span className="text-amber-700 font-medium">Different publishers</span>
+                            <span className="text-amber-800 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                              Different Publishers
+                            </span>
                           )}
                         </td>
                       </tr>
@@ -645,51 +671,55 @@ export function VariantComparator() {
               </div>
 
               <div>
-                <h5 className="text-xs font-semibold text-neutral-900 uppercase tracking-wider mb-2">
-                  Local cryptographic comparison
+                <h5 className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider mb-2">
+                  Section 2: Local Cryptographic &amp; Byte Comparison
                 </h5>
-                <div className="rounded border border-neutral-200 overflow-hidden">
+                <div className="rounded-lg border border-neutral-200 overflow-hidden shadow-sm">
                   <table className="w-full text-xs text-left">
-                    <thead className="bg-neutral-50 border-b border-neutral-200 text-neutral-600">
+                    <thead className="bg-neutral-50 border-b border-neutral-200 text-neutral-700">
                       <tr>
-                        <th className="py-2 px-3 font-semibold">Metric</th>
-                        <th className="py-2 px-3 font-semibold">Artifact A</th>
-                        <th className="py-2 px-3 font-semibold">Artifact B</th>
-                        <th className="py-2 px-3 font-semibold text-right">Result</th>
+                        <th className="py-2.5 px-3 font-semibold">Metric</th>
+                        <th className="py-2.5 px-3 font-semibold">Artifact A</th>
+                        <th className="py-2.5 px-3 font-semibold">Artifact B</th>
+                        <th className="py-2.5 px-3 font-semibold text-right">Result</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-neutral-100 text-neutral-800">
+                    <tbody className="divide-y divide-neutral-100 text-neutral-900">
                       <tr>
-                        <td className="py-2 px-3 text-neutral-500">Filename</td>
-                        <td className="py-2 px-3 font-mono truncate max-w-[140px]">{artifactA?.fileName}</td>
-                        <td className="py-2 px-3 font-mono truncate max-w-[140px]">{artifactB?.fileName}</td>
-                        <td className="py-2 px-3 text-right">
+                        <td className="py-2.5 px-3 text-neutral-500">Filename</td>
+                        <td className="py-2.5 px-3 font-mono truncate max-w-[140px]">{artifactA?.fileName}</td>
+                        <td className="py-2.5 px-3 font-mono truncate max-w-[140px]">{artifactB?.fileName}</td>
+                        <td className="py-2.5 px-3 text-right">
                           {comparison.diff.fileNameMatch ? (
-                            <span className="text-neutral-800 font-medium">Same name</span>
+                            <span className="text-neutral-900 font-medium">Same name</span>
                           ) : (
                             <span className="text-neutral-500">Different name</span>
                           )}
                         </td>
                       </tr>
                       <tr>
-                        <td className="py-2 px-3 text-neutral-500">SHA-256 hash</td>
-                        <td className="py-2 px-3 font-mono truncate max-w-[140px]">{artifactA?.sha256.slice(0, 16)}...</td>
-                        <td className="py-2 px-3 font-mono truncate max-w-[140px]">{artifactB?.sha256.slice(0, 16)}...</td>
-                        <td className="py-2 px-3 text-right">
+                        <td className="py-2.5 px-3 text-neutral-500">SHA-256 hash</td>
+                        <td className="py-2.5 px-3 font-mono truncate max-w-[140px]">{artifactA?.sha256.slice(0, 16)}...</td>
+                        <td className="py-2.5 px-3 font-mono truncate max-w-[140px]">{artifactB?.sha256.slice(0, 16)}...</td>
+                        <td className="py-2.5 px-3 text-right">
                           {comparison.diff.hashMatch ? (
-                            <span className="text-emerald-700 font-medium">Exact byte match</span>
+                            <span className="text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                              Exact Byte Match
+                            </span>
                           ) : (
-                            <span className="text-red-700 font-medium">Byte mismatch</span>
+                            <span className="text-red-800 font-semibold bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                              Byte Mismatch
+                            </span>
                           )}
                         </td>
                       </tr>
                       <tr>
-                        <td className="py-2 px-3 text-neutral-500">File size</td>
-                        <td className="py-2 px-3">{artifactA?.fileSize.toLocaleString()} B</td>
-                        <td className="py-2 px-3">{artifactB?.fileSize.toLocaleString()} B</td>
-                        <td className="py-2 px-3 text-right">
+                        <td className="py-2.5 px-3 text-neutral-500">File size</td>
+                        <td className="py-2.5 px-3">{formatBytes(artifactA?.fileSize || 0)}</td>
+                        <td className="py-2.5 px-3">{formatBytes(artifactB?.fileSize || 0)}</td>
+                        <td className="py-2.5 px-3 text-right">
                           {comparison.diff.sizeMatch ? (
-                            <span className="text-neutral-800 font-medium">Equal size</span>
+                            <span className="text-neutral-900 font-medium">Equal size</span>
                           ) : (
                             <span className="text-neutral-500">Δ {comparison.diff.sizeDeltaBytes} B</span>
                           )}
@@ -697,12 +727,12 @@ export function VariantComparator() {
                       </tr>
                       {comparison.diff.chunkDiff && (
                         <tr>
-                          <td className="py-2 px-3 text-neutral-500">Piece / Chunk diff</td>
-                          <td className="py-2 px-3" colSpan={2}>
+                          <td className="py-2.5 px-3 text-neutral-500">Piece / Chunk diff</td>
+                          <td className="py-2.5 px-3" colSpan={2}>
                             {comparison.diff.chunkDiff.identicalChunks} / {comparison.diff.chunkDiff.chunksA} identical pieces
                           </td>
-                          <td className="py-2 px-3 text-right">
-                            <span className="text-amber-700 font-medium">
+                          <td className="py-2.5 px-3 text-right">
+                            <span className="text-amber-800 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
                               {comparison.diff.chunkDiff.differingChunks} piece(s) changed
                             </span>
                           </td>
@@ -715,7 +745,7 @@ export function VariantComparator() {
             </div>
           </div>
 
-          {/* Visual lineage graph */}
+          {/* Lineage Graph */}
           <LineageTimeline
             nodes={comparison.lineageNodes}
             edges={comparison.lineageEdges}

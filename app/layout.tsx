@@ -21,19 +21,34 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-white text-neutral-900 min-h-screen flex flex-col antialiased selection:bg-neutral-900 selection:text-white">
+      <body className="bg-white text-neutral-950 min-h-screen flex flex-col antialiased selection:bg-neutral-950 selection:text-white">
         <Header />
         <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-8">
           {children}
         </main>
-        <footer className="border-t border-neutral-200 py-8 text-center text-xs text-neutral-500 bg-white">
-          <div className="max-w-5xl mx-auto px-4 space-y-1">
-            <p className="font-medium text-neutral-700">
-              Penguin Trace — Verify software integrity. Trace release provenance.
-            </p>
-            <p>
-              Anchored on Monad Testnet (Chain ID 10143) · All file hashing executes locally in your browser.
-            </p>
+        <footer className="border-t border-neutral-200 py-10 text-xs text-neutral-500 bg-neutral-50/60">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="space-y-1 text-center sm:text-left">
+              <p className="font-semibold text-neutral-900">
+                Penguin Trace — Verify software integrity. Trace provenance.
+              </p>
+              <p className="text-neutral-500 text-[11px]">
+                Cryptographic release verification layer. All file hashing executes client-side via Web Crypto SHA-256.
+              </p>
+            </div>
+
+            <div className="flex items-center space-x-4 text-[11px] font-mono text-neutral-600">
+              <a
+                href="https://testnet.monadscan.com/address/0xeB3Ef45368cf0A28679FC6F037295fC2607deF01"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-neutral-950 hover:underline transition-colors"
+              >
+                Monad Testnet (10143)
+              </a>
+              <span>·</span>
+              <span>SwarmTraceRegistry</span>
+            </div>
           </div>
         </footer>
       </body>

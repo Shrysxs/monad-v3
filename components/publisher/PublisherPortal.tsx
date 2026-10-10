@@ -16,6 +16,7 @@ import {
   Copy,
   CheckCheck,
   Info,
+  RefreshCw,
 } from "lucide-react";
 import { createWalletClient, custom } from "viem";
 import { monadTestnet, monadPublicClient } from "@/lib/chain/monad";
@@ -483,39 +484,76 @@ export function PublisherPortal() {
 
   return (
     <div className="space-y-6">
-      {/* Credential distinction explainer */}
-      <div className="p-4 rounded-lg bg-neutral-50 border border-neutral-200 text-xs space-y-2">
-        <div className="font-semibold text-neutral-900 flex items-center space-x-1.5">
-          <Info className="w-4 h-4 text-neutral-500" />
-          <span>Understanding publisher credentials</span>
-        </div>
-        <div className="grid sm:grid-cols-2 gap-3 text-neutral-600">
-          <div>
-            <span className="font-semibold text-neutral-900">EVM Wallet address: </span>
-            Authorizes on-chain transactions on Monad Testnet (`registerRelease`, `revokeRelease`). Must be authorized by the registry owner.
+      {/* 3-Step Numbered Workflow Banner */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+        <div className="p-3.5 rounded-lg border border-neutral-200 bg-white space-y-1">
+          <div className="font-mono text-[10px] text-neutral-500 font-bold uppercase">
+            Step 1
           </div>
-          <div>
-            <span className="font-semibold text-neutral-900">Ed25519 signing key: </span>
-            Cryptographically signs the detached RFC 8785 JSON manifest. Verified entirely client-side by downloaders.
+          <div className="font-bold text-neutral-950">Author &amp; Sign Manifest</div>
+          <p className="text-[11px] text-neutral-600">
+            Compute SHA-256 &amp; sign RFC 8785 envelope with local Ed25519 key.
+          </p>
+        </div>
+
+        <div className="p-3.5 rounded-lg border border-neutral-200 bg-white space-y-1">
+          <div className="font-mono text-[10px] text-neutral-500 font-bold uppercase">
+            Step 2
+          </div>
+          <div className="font-bold text-neutral-950">Connect Publisher Wallet</div>
+          <p className="text-[11px] text-neutral-600">
+            EVM account authorized on Monad Testnet registry contract.
+          </p>
+        </div>
+
+        <div className="p-3.5 rounded-lg border border-neutral-200 bg-white space-y-1">
+          <div className="font-mono text-[10px] text-neutral-500 font-bold uppercase">
+            Step 3
+          </div>
+          <div className="font-bold text-neutral-950">Commit Release On-Chain</div>
+          <p className="text-[11px] text-neutral-600">
+            Broadcast release digest commitment into SwarmTraceRegistry.
+          </p>
+        </div>
+      </div>
+
+      {/* Credential distinction explainer */}
+      <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 text-xs space-y-2 shadow-sm">
+        <div className="font-bold text-neutral-950 flex items-center space-x-2 font-mono uppercase tracking-wider">
+          <Info className="w-4 h-4 text-neutral-700" />
+          <span>Understanding Publisher Credentials</span>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4 text-neutral-600 pt-1">
+          <div className="p-3 rounded-lg bg-white border border-neutral-200 space-y-1">
+            <span className="font-bold text-neutral-950 block">EVM Wallet Address</span>
+            <p className="text-[11px] leading-relaxed">
+              Authorizes on-chain transactions on Monad Testnet (<code className="font-mono">registerRelease</code>, <code className="font-mono">revokeRelease</code>). Must be authorized by the registry owner.
+            </p>
+          </div>
+          <div className="p-3 rounded-lg bg-white border border-neutral-200 space-y-1">
+            <span className="font-bold text-neutral-950 block">Ed25519 Signing Key</span>
+            <p className="text-[11px] leading-relaxed">
+              Cryptographically signs the detached RFC 8785 JSON manifest. Verified client-side by downloaders using the Web Crypto and curves API.
+            </p>
           </div>
         </div>
       </div>
 
       {/* Publisher Status Header */}
-      <div className="rounded-lg border border-neutral-200 bg-white p-5 space-y-4">
+      <div className="rounded-xl border border-neutral-200 bg-white p-6 space-y-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-0.5">
-            <span className="text-xs uppercase tracking-wider text-neutral-500 font-semibold font-mono">
+            <span className="text-xs uppercase tracking-wider text-neutral-500 font-mono font-bold">
               Monad Testnet (Chain ID 10143)
             </span>
-            <h3 className="text-base font-bold text-neutral-900">
-              Publisher registry status
+            <h3 className="text-base font-bold text-neutral-950">
+              Publisher Registry Status
             </h3>
           </div>
 
           <div className="flex items-center space-x-2">
             {walletAddress ? (
-              <span className="px-2.5 py-1 rounded text-xs font-mono font-medium bg-neutral-100 text-neutral-800 border border-neutral-200 flex items-center space-x-1.5">
+              <span className="px-3 py-1 rounded text-xs font-mono font-medium bg-neutral-100 text-neutral-900 border border-neutral-200 flex items-center space-x-2 shadow-sm">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
                 <span>{walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</span>
               </span>
@@ -523,7 +561,7 @@ export function PublisherPortal() {
               <button
                 type="button"
                 onClick={connectWallet}
-                className="px-3 py-1.5 rounded-md text-xs font-medium bg-black text-white hover:bg-neutral-800 transition-colors flex items-center space-x-1.5"
+                className="px-3.5 py-1.5 rounded-md text-xs font-semibold bg-neutral-950 text-white hover:bg-neutral-800 transition-colors flex items-center space-x-1.5 shadow-sm"
               >
                 <Wallet className="w-3.5 h-3.5" />
                 <span>Connect wallet</span>
@@ -534,7 +572,7 @@ export function PublisherPortal() {
               <button
                 type="button"
                 onClick={switchToMonadTestnet}
-                className="px-2.5 py-1 rounded-md text-xs font-medium bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100"
+                className="px-3 py-1.5 rounded-md text-xs font-medium bg-amber-50 text-amber-950 border border-amber-300 hover:bg-amber-100"
               >
                 Switch to Monad (10143)
               </button>
@@ -543,36 +581,40 @@ export function PublisherPortal() {
         </div>
 
         <div className="grid sm:grid-cols-3 gap-3 text-xs">
-          <div className="p-3 rounded bg-neutral-50 border border-neutral-200 space-y-1">
-            <div className="text-neutral-500">Connected wallet:</div>
-            <div className="font-mono text-neutral-900 truncate">
+          <div className="p-3.5 rounded-lg bg-neutral-50 border border-neutral-200 space-y-1">
+            <div className="text-neutral-500 font-mono text-[10px] uppercase">Connected Wallet:</div>
+            <div className="font-mono text-neutral-950 font-bold truncate">
               {walletAddress || "Not connected"}
             </div>
           </div>
 
-          <div className="p-3 rounded bg-neutral-50 border border-neutral-200 space-y-1">
-            <div className="text-neutral-500">Publisher authorization:</div>
-            <div className="font-medium">
+          <div className="p-3.5 rounded-lg bg-neutral-50 border border-neutral-200 space-y-1">
+            <div className="text-neutral-500 font-mono text-[10px] uppercase">Publisher Authorization:</div>
+            <div className="font-bold">
               {isCheckingAuth ? (
                 <span className="text-neutral-500">Checking...</span>
               ) : isAuthorized === true ? (
-                <span className="text-emerald-700">Authorized publisher</span>
+                <span className="text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block font-semibold">
+                  Authorized Publisher
+                </span>
               ) : isAuthorized === false ? (
-                <span className="text-amber-700">Unauthorized account</span>
+                <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-block font-semibold">
+                  Unauthorized Account
+                </span>
               ) : (
                 <span className="text-neutral-500">Connect to verify</span>
               )}
             </div>
           </div>
 
-          <div className="p-3 rounded bg-neutral-50 border border-neutral-200 space-y-1">
-            <div className="text-neutral-500">Registry contract:</div>
-            <div className="flex items-center justify-between font-mono text-neutral-900 gap-1">
-              <span className="truncate">{contractAddress.slice(0, 10)}...{contractAddress.slice(-6)}</span>
+          <div className="p-3.5 rounded-lg bg-neutral-50 border border-neutral-200 space-y-1">
+            <div className="text-neutral-500 font-mono text-[10px] uppercase">Registry Contract:</div>
+            <div className="flex items-center justify-between font-mono text-neutral-950 gap-1">
+              <span className="truncate font-semibold">{contractAddress.slice(0, 10)}...{contractAddress.slice(-6)}</span>
               <button
                 type="button"
                 onClick={() => copyText("regAddress", contractAddress)}
-                className="text-neutral-400 hover:text-neutral-900 shrink-0 p-0.5"
+                className="text-neutral-400 hover:text-neutral-950 shrink-0 p-0.5"
                 title="Copy address"
               >
                 {copiedKey === "regAddress" ? <CheckCheck className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -583,13 +625,13 @@ export function PublisherPortal() {
 
         {/* Warning if connected account is unauthorized */}
         {walletAddress && isAuthorized === false && (
-          <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1">
-            <div className="font-semibold flex items-center space-x-1.5">
+          <div className="p-4 rounded-lg bg-amber-50 border border-amber-300 text-amber-950 text-xs space-y-1.5 shadow-sm">
+            <div className="font-bold flex items-center space-x-2">
               <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
-              <span>Wallet not authorized on registry</span>
+              <span>Wallet Not Authorized on Registry</span>
             </div>
-            <p className="text-amber-800 leading-relaxed">
-              Connected address (<code className="font-mono">{walletAddress}</code>) is not on the authorized publishers list in SwarmTraceRegistry. Calling <code className="font-mono">registerRelease</code> will revert on-chain. Contact the contract owner (<code className="font-mono">0xB9BA42...</code>) to call <code className="font-mono">authorizePublisher</code>.
+            <p className="text-amber-900 leading-relaxed">
+              Connected address (<code className="font-mono bg-amber-100/60 px-1 py-0.5 rounded">{walletAddress}</code>) is not on the authorized publishers list in SwarmTraceRegistry. Calling <code className="font-mono">registerRelease</code> will revert on-chain. Contact the contract owner (<code className="font-mono">0xB9BA42...</code>) to call <code className="font-mono">authorizePublisher</code>.
             </p>
           </div>
         )}
@@ -604,14 +646,14 @@ export function PublisherPortal() {
             setStatusMessage(null);
             setErrorMessage(null);
           }}
-          className={`px-4 py-2 text-xs font-semibold rounded-t-md transition-colors flex items-center space-x-1.5 ${
+          className={`px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all flex items-center space-x-1.5 ${
             activeTab === "manifest"
-              ? "bg-white text-neutral-900 border-t border-x border-neutral-200"
-              : "text-neutral-500 hover:text-neutral-900"
+              ? "bg-neutral-950 text-white shadow-sm"
+              : "text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100"
           }`}
         >
           <FileCode className="w-3.5 h-3.5" />
-          <span>1. Author &amp; sign manifest</span>
+          <span>1. Author &amp; Sign Manifest</span>
         </button>
 
         <button
@@ -621,10 +663,10 @@ export function PublisherPortal() {
             setStatusMessage(null);
             setErrorMessage(null);
           }}
-          className={`px-4 py-2 text-xs font-semibold rounded-t-md transition-colors flex items-center space-x-1.5 ${
+          className={`px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all flex items-center space-x-1.5 ${
             activeTab === "register"
-              ? "bg-white text-neutral-900 border-t border-x border-neutral-200"
-              : "text-neutral-500 hover:text-neutral-900"
+              ? "bg-neutral-950 text-white shadow-sm"
+              : "text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100"
           }`}
         >
           <PlusCircle className="w-3.5 h-3.5" />
@@ -638,14 +680,14 @@ export function PublisherPortal() {
             setStatusMessage(null);
             setErrorMessage(null);
           }}
-          className={`px-4 py-2 text-xs font-semibold rounded-t-md transition-colors flex items-center space-x-1.5 ${
+          className={`px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all flex items-center space-x-1.5 ${
             activeTab === "revoke"
-              ? "bg-white text-neutral-900 border-t border-x border-neutral-200"
-              : "text-neutral-500 hover:text-neutral-900"
+              ? "bg-neutral-950 text-white shadow-sm"
+              : "text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100"
           }`}
         >
           <AlertOctagon className="w-3.5 h-3.5" />
-          <span>Revoke release</span>
+          <span>Revoke Release</span>
         </button>
 
         <button
@@ -655,62 +697,62 @@ export function PublisherPortal() {
             setStatusMessage(null);
             setErrorMessage(null);
           }}
-          className={`px-4 py-2 text-xs font-semibold rounded-t-md transition-colors flex items-center space-x-1.5 ${
+          className={`px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all flex items-center space-x-1.5 ${
             activeTab === "lookup"
-              ? "bg-white text-neutral-900 border-t border-x border-neutral-200"
-              : "text-neutral-500 hover:text-neutral-900"
+              ? "bg-neutral-950 text-white shadow-sm"
+              : "text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100"
           }`}
         >
           <Search className="w-3.5 h-3.5" />
-          <span>Lookup</span>
+          <span>Registry Lookup</span>
         </button>
       </div>
 
       {/* Tab 1: Author & Sign Manifest */}
       {activeTab === "manifest" && (
-        <form onSubmit={handleGenerateAndSignManifest} className="rounded-lg border border-neutral-200 bg-white p-5 space-y-4">
+        <form onSubmit={handleGenerateAndSignManifest} className="rounded-xl border border-neutral-200 bg-white p-6 space-y-4 shadow-sm animate-in fade-in duration-200">
           <div className="space-y-1">
-            <h4 className="text-xs font-semibold text-neutral-900 uppercase tracking-wider">
-              Author and sign release manifest
+            <h4 className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider">
+              Author and Sign Release Manifest
             </h4>
             <p className="text-xs text-neutral-500">
-              Signs metadata according to RFC 8785 JSON Canonicalization Scheme using your local Ed25519 private key. Private keys never leave your browser.
+              Signs metadata according to RFC 8785 JSON Canonicalization Scheme using your local Ed25519 private key in memory. Private keys never leave your browser.
             </p>
           </div>
 
           <div className="grid sm:grid-cols-3 gap-3 text-xs">
             <div>
-              <label className="text-neutral-600 block mb-1">Publisher ID:</label>
+              <label className="text-neutral-700 font-medium block mb-1">Publisher ID:</label>
               <input
                 type="text"
                 value={manifestGenPublisherId}
                 onChange={(e) => setManifestGenPublisherId(e.target.value)}
-                className="w-full rounded bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-900 focus:outline-none focus:border-neutral-900"
+                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
               />
             </div>
             <div>
-              <label className="text-neutral-600 block mb-1">Product ID:</label>
+              <label className="text-neutral-700 font-medium block mb-1">Product ID:</label>
               <input
                 type="text"
                 value={manifestGenProductId}
                 onChange={(e) => setManifestGenProductId(e.target.value)}
-                className="w-full rounded bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-900 focus:outline-none focus:border-neutral-900"
+                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
               />
             </div>
             <div>
-              <label className="text-neutral-600 block mb-1">Version:</label>
+              <label className="text-neutral-700 font-medium block mb-1">Version:</label>
               <input
                 type="text"
                 value={manifestGenVersion}
                 onChange={(e) => setManifestGenVersion(e.target.value)}
-                className="w-full rounded bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-900 focus:outline-none focus:border-neutral-900"
+                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
               />
             </div>
           </div>
 
           <div className="grid sm:grid-cols-2 gap-3 text-xs">
             <div>
-              <label className="text-neutral-600 block mb-1">Target artifact file:</label>
+              <label className="text-neutral-700 font-medium block mb-1">Target artifact file:</label>
               <input
                 type="file"
                 onChange={handleFileSelectedForManifest}
@@ -718,33 +760,33 @@ export function PublisherPortal() {
               />
             </div>
             <div>
-              <label className="text-neutral-600 block mb-1">Publisher Key ID:</label>
+              <label className="text-neutral-700 font-medium block mb-1">Publisher Key ID:</label>
               <input
                 type="text"
                 value={manifestGenKeyId}
                 onChange={(e) => setManifestGenKeyId(e.target.value)}
-                className="w-full rounded bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-900 focus:outline-none focus:border-neutral-900"
+                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
               />
             </div>
           </div>
 
           <div className="text-xs">
-            <label className="text-neutral-600 block mb-1">
+            <label className="text-neutral-700 font-medium block mb-1">
               Ed25519 Private Key Hex (32 bytes / 64 hex chars):
             </label>
             <input
               type="password"
-              placeholder="e.g. 9d61b19deffd5... (stored in memory only)"
+              placeholder="e.g. 9d61b19deffd5... (stored in local browser memory only)"
               value={manifestGenPrivateKeyHex}
               onChange={(e) => setManifestGenPrivateKeyHex(e.target.value)}
-              className="w-full rounded bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-900 focus:outline-none focus:border-neutral-900"
+              className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
             />
           </div>
 
           <div className="flex items-center space-x-3 pt-2">
             <button
               type="submit"
-              className="px-5 py-2 rounded-md bg-black text-white hover:bg-neutral-800 font-medium text-xs transition-colors"
+              className="px-5 py-2 rounded-lg bg-neutral-950 text-white hover:bg-neutral-800 font-semibold text-xs transition-all shadow-sm"
             >
               Sign manifest locally
             </button>
@@ -753,7 +795,7 @@ export function PublisherPortal() {
               <button
                 type="button"
                 onClick={handleTransferToRegistration}
-                className="px-4 py-2 rounded-md bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-50 font-medium text-xs transition-colors"
+                className="px-4 py-2 rounded-lg bg-white text-neutral-950 border border-neutral-300 hover:bg-neutral-50 font-semibold text-xs transition-all"
               >
                 Use for on-chain registration &rarr;
               </button>
@@ -761,14 +803,14 @@ export function PublisherPortal() {
           </div>
 
           {manifestSignSuccess && (
-            <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center space-x-2">
+            <div className="p-3.5 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs flex items-center space-x-2">
               <Check className="w-4 h-4 text-emerald-700 shrink-0" />
               <span>{manifestSignSuccess}</span>
             </div>
           )}
 
           {manifestSignError && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-900 text-xs flex items-center space-x-2">
+            <div className="p-3.5 rounded-lg bg-red-50 border border-red-300 text-red-950 text-xs flex items-center space-x-2">
               <X className="w-4 h-4 text-red-700 shrink-0" />
               <span>{manifestSignError}</span>
             </div>
@@ -777,11 +819,11 @@ export function PublisherPortal() {
           {manifestGenSignedJson && (
             <div className="space-y-2 pt-2">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-neutral-900">Signed Manifest JSON:</span>
+                <span className="font-bold text-neutral-950">Signed Manifest JSON:</span>
                 <button
                   type="button"
                   onClick={() => copyText("signedManifest", manifestGenSignedJson)}
-                  className="text-neutral-600 hover:text-neutral-900 flex items-center space-x-1"
+                  className="text-neutral-600 hover:text-neutral-950 flex items-center space-x-1"
                 >
                   {copiedKey === "signedManifest" ? <CheckCheck className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                   <span>Copy JSON</span>
@@ -791,7 +833,7 @@ export function PublisherPortal() {
                 readOnly
                 rows={6}
                 value={manifestGenSignedJson}
-                className="w-full rounded bg-neutral-50 border border-neutral-200 p-2.5 font-mono text-[11px] text-neutral-800 resize-none"
+                className="w-full rounded-md bg-neutral-50 border border-neutral-200 p-2.5 font-mono text-[11px] text-neutral-900 resize-none"
               />
             </div>
           )}
@@ -800,10 +842,10 @@ export function PublisherPortal() {
 
       {/* Tab 2: Commit Release to Registry */}
       {activeTab === "register" && (
-        <form onSubmit={handleRegisterRelease} className="rounded-lg border border-neutral-200 bg-white p-5 space-y-4">
+        <form onSubmit={handleRegisterRelease} className="rounded-xl border border-neutral-200 bg-white p-6 space-y-4 shadow-sm animate-in fade-in duration-200">
           <div className="space-y-1">
-            <h4 className="text-xs font-semibold text-neutral-900 uppercase tracking-wider">
-              Commit release to Monad Testnet registry
+            <h4 className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider">
+              Commit Release to Monad Testnet Registry
             </h4>
             <p className="text-xs text-neutral-500">
               Broadcasts an immutable release commitment storing file hash, manifest digest, and predecessor link.
@@ -812,80 +854,80 @@ export function PublisherPortal() {
 
           <div className="grid sm:grid-cols-3 gap-3 text-xs">
             <div>
-              <label className="text-neutral-600 block mb-1">Publisher ID:</label>
+              <label className="text-neutral-700 font-medium block mb-1">Publisher ID:</label>
               <input
                 type="text"
                 value={regPublisherId}
                 onChange={(e) => setRegPublisherId(e.target.value)}
-                className="w-full rounded bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-900 focus:outline-none focus:border-neutral-900"
+                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
               />
             </div>
             <div>
-              <label className="text-neutral-600 block mb-1">Product ID:</label>
+              <label className="text-neutral-700 font-medium block mb-1">Product ID:</label>
               <input
                 type="text"
                 value={regProductId}
                 onChange={(e) => setRegProductId(e.target.value)}
-                className="w-full rounded bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-900 focus:outline-none focus:border-neutral-900"
+                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
               />
             </div>
             <div>
-              <label className="text-neutral-600 block mb-1">Version:</label>
+              <label className="text-neutral-700 font-medium block mb-1">Version:</label>
               <input
                 type="text"
                 value={regVersion}
                 onChange={(e) => setRegVersion(e.target.value)}
-                className="w-full rounded bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-900 focus:outline-none focus:border-neutral-900"
+                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
               />
             </div>
           </div>
 
           <div className="space-y-3 text-xs">
             <div>
-              <label className="text-neutral-600 block mb-1">File SHA-256 Digest (bytes32):</label>
+              <label className="text-neutral-700 font-medium block mb-1">File SHA-256 Digest (bytes32):</label>
               <input
                 type="text"
                 value={regFileHash}
                 onChange={(e) => setRegFileHash(e.target.value)}
-                className="w-full rounded bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-900 focus:outline-none focus:border-neutral-900"
+                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
               />
             </div>
 
             <div>
-              <label className="text-neutral-600 block mb-1">Manifest Digest (bytes32):</label>
+              <label className="text-neutral-700 font-medium block mb-1">Manifest Digest (bytes32):</label>
               <input
                 type="text"
                 value={regManifestDigest}
                 onChange={(e) => setRegManifestDigest(e.target.value)}
-                className="w-full rounded bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-900 focus:outline-none focus:border-neutral-900"
+                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
               />
             </div>
 
             <div>
-              <label className="text-neutral-600 block mb-1">Previous Release Digest (Optional, for supersession):</label>
+              <label className="text-neutral-700 font-medium block mb-1">Previous Release Digest (Optional, for supersession):</label>
               <input
                 type="text"
                 value={regPreviousReleaseDigest}
                 onChange={(e) => setRegPreviousReleaseDigest(e.target.value)}
-                className="w-full rounded bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-900 focus:outline-none focus:border-neutral-900"
+                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
               />
             </div>
           </div>
 
-          {/* Computed Preview Digest */}
-          <div className="p-3 rounded bg-neutral-50 border border-neutral-200 space-y-1 text-xs">
-            <div className="text-neutral-500 flex items-center justify-between">
+          {/* High-Contrast Computed Preview Digest Box */}
+          <div className="p-4 rounded-xl bg-neutral-950 text-white border border-neutral-800 space-y-1.5 text-xs shadow-sm">
+            <div className="text-neutral-400 flex items-center justify-between font-mono text-[11px]">
               <span>Deterministic Release Digest (keccak256):</span>
-              <span className="font-mono text-neutral-400">Registry State Key</span>
+              <span className="text-neutral-400">Monad State Key</span>
             </div>
-            <div className="font-mono text-neutral-900 break-all">{computedPreviewDigest}</div>
+            <div className="font-mono text-emerald-400 break-all text-xs font-semibold">{computedPreviewDigest}</div>
           </div>
 
           <div className="flex items-center justify-between pt-2">
             <button
               type="submit"
               disabled={isSubmitting || isAuthorized === false}
-              className="px-5 py-2.5 rounded-md bg-black text-white hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 font-medium text-xs transition-colors flex items-center space-x-2"
+              className="px-6 py-2.5 rounded-lg bg-neutral-950 text-white hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 font-semibold text-xs transition-all shadow-sm flex items-center space-x-2"
             >
               <span>{isSubmitting ? "Broadcasting..." : "Commit release to Monad"}</span>
             </button>
@@ -895,7 +937,7 @@ export function PublisherPortal() {
                 href={`https://testnet.monadscan.com/tx/${confirmedTxHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-neutral-900 hover:underline inline-flex items-center space-x-1"
+                className="text-xs text-neutral-950 hover:underline inline-flex items-center space-x-1 font-semibold"
               >
                 <span>View on MonadScan</span>
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -907,10 +949,10 @@ export function PublisherPortal() {
 
       {/* Tab 3: Revoke Release */}
       {activeTab === "revoke" && (
-        <form onSubmit={handleRevokeRelease} className="rounded-lg border border-neutral-200 bg-white p-5 space-y-4">
+        <form onSubmit={handleRevokeRelease} className="rounded-xl border border-neutral-200 bg-white p-6 space-y-4 shadow-sm animate-in fade-in duration-200">
           <div className="space-y-1">
-            <h4 className="text-xs font-semibold text-neutral-900 uppercase tracking-wider">
-              Revoke compromised release
+            <h4 className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider">
+              Revoke Compromised Release
             </h4>
             <p className="text-xs text-neutral-500">
               Permanently marks a release commitment as REVOKED on Monad Testnet.
@@ -919,23 +961,23 @@ export function PublisherPortal() {
 
           <div className="space-y-3 text-xs">
             <div>
-              <label className="text-neutral-600 block mb-1">Release Digest to Revoke (bytes32):</label>
+              <label className="text-neutral-700 font-medium block mb-1">Release Digest to Revoke (bytes32):</label>
               <input
                 type="text"
                 placeholder="0x..."
                 value={revokeDigest}
                 onChange={(e) => setRevokeDigest(e.target.value)}
-                className="w-full rounded bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-900 focus:outline-none focus:border-neutral-900"
+                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
               />
             </div>
 
             <div>
-              <label className="text-neutral-600 block mb-1">Revocation Reason:</label>
+              <label className="text-neutral-700 font-medium block mb-1">Revocation Reason:</label>
               <input
                 type="text"
                 value={revokeReason}
                 onChange={(e) => setRevokeReason(e.target.value)}
-                className="w-full rounded bg-white border border-neutral-200 px-3 py-1.5 text-neutral-900 focus:outline-none focus:border-neutral-900"
+                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 text-neutral-950 focus:outline-none focus:border-neutral-950"
               />
             </div>
           </div>
@@ -944,7 +986,7 @@ export function PublisherPortal() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-5 py-2.5 rounded-md bg-red-600 text-white hover:bg-red-700 disabled:bg-neutral-200 disabled:text-neutral-400 font-medium text-xs transition-colors"
+              className="px-6 py-2.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:bg-neutral-200 disabled:text-neutral-400 font-semibold text-xs transition-all shadow-sm"
             >
               <span>{isSubmitting ? "Revoking..." : "Revoke release on Monad"}</span>
             </button>
@@ -954,7 +996,7 @@ export function PublisherPortal() {
                 href={`https://testnet.monadscan.com/tx/${confirmedTxHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-neutral-900 hover:underline inline-flex items-center space-x-1"
+                className="text-xs text-neutral-950 hover:underline inline-flex items-center space-x-1 font-semibold"
               >
                 <span>View on MonadScan</span>
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -966,13 +1008,13 @@ export function PublisherPortal() {
 
       {/* Tab 4: Lookup */}
       {activeTab === "lookup" && (
-        <form onSubmit={handleLookupRelease} className="rounded-lg border border-neutral-200 bg-white p-5 space-y-4">
+        <form onSubmit={handleLookupRelease} className="rounded-xl border border-neutral-200 bg-white p-6 space-y-4 shadow-sm animate-in fade-in duration-200">
           <div className="space-y-1">
-            <h4 className="text-xs font-semibold text-neutral-900 uppercase tracking-wider">
-              Query registry by digest or file hash
+            <h4 className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider">
+              Query Registry by Digest or File Hash
             </h4>
             <p className="text-xs text-neutral-500">
-              Query live commitments recorded on Monad Testnet (`0xeB3Ef...`).
+              Query live commitments recorded on Monad Testnet (<code className="font-mono">0xeB3Ef...</code>).
             </p>
           </div>
 
@@ -982,36 +1024,36 @@ export function PublisherPortal() {
               placeholder="0x... release digest or file SHA-256"
               value={lookupQuery}
               onChange={(e) => setLookupQuery(e.target.value)}
-              className="flex-1 rounded bg-white border border-neutral-200 px-3 py-1.5 font-mono text-xs text-neutral-900 focus:outline-none focus:border-neutral-900"
+              className="flex-1 rounded-md bg-white border border-neutral-200 px-3 py-2 font-mono text-xs text-neutral-950 focus:outline-none focus:border-neutral-950"
             />
             <button
               type="submit"
               disabled={isLookingUp}
-              className="px-4 py-1.5 rounded-md bg-black text-white hover:bg-neutral-800 disabled:bg-neutral-200 font-medium text-xs transition-colors"
+              className="px-5 py-2 rounded-lg bg-neutral-950 text-white hover:bg-neutral-800 disabled:bg-neutral-200 font-semibold text-xs transition-all shadow-sm"
             >
               {isLookingUp ? "Searching..." : "Lookup"}
             </button>
           </div>
 
           {lookupError && (
-            <div className="p-3 rounded-lg bg-neutral-100 border border-neutral-200 text-neutral-700 text-xs flex items-center space-x-2">
-              <Info className="w-4 h-4 text-neutral-500 shrink-0" />
+            <div className="p-3.5 rounded-lg bg-neutral-100 border border-neutral-200 text-neutral-700 text-xs flex items-center space-x-2">
+              <Info className="w-4 h-4 text-neutral-600 shrink-0" />
               <span>{lookupError}</span>
             </div>
           )}
 
           {lookupRecord && (
-            <div className="p-4 rounded-lg bg-neutral-50 border border-neutral-200 space-y-2 text-xs font-mono">
-              <div className="flex justify-between items-center font-sans font-semibold">
-                <span>Release Record</span>
-                <span className="px-2 py-0.5 rounded text-[10px] bg-neutral-200 text-neutral-800">
+            <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 space-y-2 text-xs font-mono shadow-sm">
+              <div className="flex justify-between items-center font-sans font-bold">
+                <span className="text-neutral-950">Release Record Found</span>
+                <span className="px-2.5 py-0.5 rounded text-[10px] bg-neutral-950 text-white font-mono">
                   {lookupRecord.status}
                 </span>
               </div>
-              <div className="text-neutral-600 truncate">Digest: {lookupRecord.releaseDigest}</div>
-              <div className="text-neutral-600 truncate">File Hash: {lookupRecord.fileHash}</div>
-              <div className="text-neutral-600 truncate">Publisher: {lookupRecord.publisherId}</div>
-              <div className="text-neutral-600">Product: {lookupRecord.productId} v{lookupRecord.releaseVersion}</div>
+              <div className="text-neutral-700 truncate">Digest: {lookupRecord.releaseDigest}</div>
+              <div className="text-neutral-700 truncate">File Hash: {lookupRecord.fileHash}</div>
+              <div className="text-neutral-700 truncate">Publisher: {lookupRecord.publisherId}</div>
+              <div className="text-neutral-700">Product: {lookupRecord.productId} v{lookupRecord.releaseVersion}</div>
             </div>
           )}
         </form>
@@ -1019,14 +1061,14 @@ export function PublisherPortal() {
 
       {/* Status Messages */}
       {statusMessage && (
-        <div className="p-3.5 rounded-lg bg-neutral-100 border border-neutral-200 text-neutral-800 text-xs flex items-center space-x-2">
-          <Info className="w-4 h-4 text-neutral-600 shrink-0" />
+        <div className="p-4 rounded-xl bg-neutral-100 border border-neutral-300 text-neutral-900 text-xs flex items-center space-x-2.5 shadow-sm">
+          <Info className="w-4 h-4 text-neutral-700 shrink-0" />
           <span>{statusMessage}</span>
         </div>
       )}
 
       {errorMessage && (
-        <div className="p-3.5 rounded-lg bg-red-50 border border-red-200 text-red-900 text-xs flex items-center space-x-2">
+        <div className="p-4 rounded-xl bg-red-50 border border-red-300 text-red-950 text-xs flex items-center space-x-2.5 shadow-sm">
           <X className="w-4 h-4 text-red-700 shrink-0" />
           <span>{errorMessage}</span>
         </div>

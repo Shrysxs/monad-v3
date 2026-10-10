@@ -11,7 +11,12 @@ import {
   Copy,
   CheckCheck,
   ChevronDown,
-  ChevronRight,
+  Layers,
+  ShieldCheck,
+  ShieldAlert,
+  HelpCircle,
+  FileCheck2,
+  RefreshCw,
   ExternalLink,
 } from "lucide-react";
 import { verifyFileAgainstManifest } from "@/lib/verification/engine";
@@ -43,6 +48,7 @@ export function FileVerifier() {
   const [publisherPubKey, setPublisherPubKey] = useState<string>(DEMO_PUBLISHER.publicKeyHex);
   const [onChainRecord, setOnChainRecord] = useState<ReleaseRecord | undefined>(undefined);
   const [isDemoData, setIsDemoData] = useState<boolean>(true);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
 
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [verifyingStep, setVerifyingStep] = useState<string>("");
@@ -94,10 +100,7 @@ export function FileVerifier() {
   }
 
   // Handle local user file upload
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  async function processSelectedFile(file: File) {
     try {
       const buffer = await file.arrayBuffer();
       setFileName(file.name);
@@ -109,6 +112,33 @@ export function FileVerifier() {
       setErrorMessage(null);
     } catch (err) {
       setErrorMessage("Could not read local file: " + (err as Error).message);
+    }
+  }
+
+  function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) {
+      processSelectedFile(file);
+    }
+  }
+
+  // Drag and drop handlers
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(false);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processSelectedFile(file);
     }
   }
 
@@ -146,7 +176,7 @@ export function FileVerifier() {
 
     setIsVerifying(true);
     setErrorMessage(null);
-    setVerifyingStep("Parsing and validating RFC 8785 manifest...");
+    setVerifyingStep("Parsing and canonicalizing RFC 8785 manifest...");
 
     try {
       // 1. Validate manifest JSON
@@ -159,8 +189,8 @@ export function FileVerifier() {
 
       setActiveManifest(parsed.manifest);
 
-      // Check on-chain registry for publisher and release
-      setVerifyingStep("Checking Monad Testnet registry commitments...");
+      // 2. Query on-chain registry for publisher and release
+      setVerifyingStep("Inspecting Monad Testnet commitments...");
       let effectiveRecord = onChainRecord;
       let authorizedPubKeyFromChain: string | null = null;
       let networkErrorMsg: string | null = null;
@@ -183,8 +213,8 @@ export function FileVerifier() {
         networkErrorMsg = netErr?.message || "Failed to query Monad Testnet RPC";
       }
 
-      // 2. Run verification engine
-      setVerifyingStep("Calculating SHA-256 and verifying pieces locally...");
+      // 3. Run verification engine
+      setVerifyingStep("Calculating whole-file SHA-256 and piece hashes in Web Crypto...");
       const res = await verifyFileAgainstManifest({
         fileBytes,
         fileName,
@@ -210,85 +240,101 @@ export function FileVerifier() {
       case "MATCHING_AUTHENTICATED_RELEASE":
         return {
           title: "Integrity match",
-          style: "bg-emerald-50 border-emerald-200 text-emerald-900",
-          badgeStyle: "bg-emerald-100 text-emerald-800 border-emerald-300",
+          style: "bg-emerald-50 border-emerald-300 text-emerald-950",
+          badgeStyle: "bg-emerald-100 text-emerald-900 border-emerald-300",
           icon: <Check className="w-5 h-5 text-emerald-700 shrink-0" />,
-          summary: "Calculated SHA-256 checksum matches the signed manifest. Publisher signature and Monad Testnet registry commitments verified.",
+          summary:
+            "Calculated SHA-256 checksum matches the signed manifest. Publisher Ed25519 signature verified and release commitments confirmed on Monad Testnet.",
         };
       case "HASH_MISMATCH":
         return {
           title: "Hash mismatch",
-          style: "bg-red-50 border-red-200 text-red-900",
-          badgeStyle: "bg-red-100 text-red-800 border-red-300",
+          style: "bg-red-50 border-red-300 text-red-950",
+          badgeStyle: "bg-red-100 text-red-900 border-red-300",
           icon: <X className="w-5 h-5 text-red-700 shrink-0" />,
-          summary: "The computed file hash differs from the signed manifest digest. The file content has changed or become corrupted.",
+          summary:
+            "The computed file digest does not match the signed manifest checksum. File content has been modified, corrupted, or repacked.",
         };
       case "INVALID_MANIFEST_SIGNATURE":
         return {
           title: "Signature invalid",
-          style: "bg-red-50 border-red-200 text-red-900",
-          badgeStyle: "bg-red-100 text-red-800 border-red-300",
+          style: "bg-red-50 border-red-300 text-red-950",
+          badgeStyle: "bg-red-100 text-red-900 border-red-300",
           icon: <X className="w-5 h-5 text-red-700 shrink-0" />,
-          summary: "The Ed25519 signature does not match the manifest contents or publisher key. The manifest cannot be trusted.",
+          summary:
+            "The Ed25519 signature does not match the manifest contents or publisher key. The release manifest cannot be authenticated.",
         };
       case "UNAUTHORIZED_KEY":
         return {
           title: "Publisher not authorized",
-          style: "bg-amber-50 border-amber-200 text-amber-900",
-          badgeStyle: "bg-amber-100 text-amber-800 border-amber-300",
+          style: "bg-amber-50 border-amber-300 text-amber-950",
+          badgeStyle: "bg-amber-100 text-amber-900 border-amber-300",
           icon: <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0" />,
-          summary: "The key used to sign this manifest is not registered as authorized for this publisher on Monad Testnet.",
+          summary:
+            "The signing key used for this manifest is not registered as an authorized publisher key on Monad Testnet.",
         };
       case "UNKNOWN_RELEASE":
         return {
           title: "Release not found",
-          style: "bg-neutral-100 border-neutral-200 text-neutral-800",
-          badgeStyle: "bg-neutral-200 text-neutral-800 border-neutral-300",
-          icon: <Info className="w-5 h-5 text-neutral-600 shrink-0" />,
-          summary: "No on-chain commitment was found on Monad Testnet for this release digest. The file may be uncommitted or self-hosted.",
+          style: "bg-neutral-100 border-neutral-300 text-neutral-900",
+          badgeStyle: "bg-neutral-200 text-neutral-900 border-neutral-300",
+          icon: <HelpCircle className="w-5 h-5 text-neutral-600 shrink-0" />,
+          summary:
+            "No commitment for this release digest was found on the Monad Testnet registry. The file may be uncommitted or self-hosted.",
         };
       case "NETWORK_ERROR":
         return {
           title: "Registry unavailable",
-          style: "bg-neutral-100 border-neutral-200 text-neutral-800",
-          badgeStyle: "bg-neutral-200 text-neutral-800 border-neutral-300",
+          style: "bg-neutral-100 border-neutral-300 text-neutral-900",
+          badgeStyle: "bg-neutral-200 text-neutral-900 border-neutral-300",
           icon: <Info className="w-5 h-5 text-neutral-600 shrink-0" />,
-          summary: "Unable to reach the Monad Testnet RPC endpoint. Local file integrity and signature were verified, but on-chain status is unknown.",
+          summary:
+            "Unable to reach the Monad Testnet RPC endpoint. Local file integrity and Ed25519 signature were verified, but on-chain status could not be fetched.",
         };
       case "REVOKED_RELEASE":
         return {
           title: "Release revoked",
-          style: "bg-red-50 border-red-200 text-red-900",
-          badgeStyle: "bg-red-100 text-red-800 border-red-300",
+          style: "bg-red-50 border-red-300 text-red-950",
+          badgeStyle: "bg-red-100 text-red-900 border-red-300",
           icon: <X className="w-5 h-5 text-red-700 shrink-0" />,
-          summary: "This release was marked as REVOKED on Monad Testnet by the publisher. Do not run or deploy this artifact.",
+          summary:
+            "This release was officially marked as REVOKED on Monad Testnet by the publisher. Do not run or deploy this software.",
         };
       case "SUPERSEDED_RELEASE":
         return {
           title: "Release superseded",
-          style: "bg-neutral-100 border-neutral-200 text-neutral-800",
-          badgeStyle: "bg-neutral-200 text-neutral-800 border-neutral-300",
+          style: "bg-neutral-100 border-neutral-300 text-neutral-900",
+          badgeStyle: "bg-neutral-200 text-neutral-900 border-neutral-300",
           icon: <Info className="w-5 h-5 text-neutral-600 shrink-0" />,
-          summary: "This release is authentic but has been superseded by a newer version on Monad Testnet.",
+          summary:
+            "This release is authentic but has been superseded by a newer version registered on Monad Testnet.",
         };
       default:
         return {
           title: "Incomplete verification",
-          style: "bg-amber-50 border-amber-200 text-amber-900",
-          badgeStyle: "bg-amber-100 text-amber-800 border-amber-300",
+          style: "bg-amber-50 border-amber-300 text-amber-950",
+          badgeStyle: "bg-amber-100 text-amber-900 border-amber-300",
           icon: <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0" />,
           summary: v.summary || "One or more verification steps could not be completed.",
         };
     }
   }
 
+  function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Sample Fixtures Bar */}
-      <div className="p-3 rounded-lg border border-neutral-200 bg-neutral-50 flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div className="p-3.5 rounded-lg border border-neutral-200 bg-neutral-50 flex flex-wrap items-center justify-between gap-3 text-xs shadow-sm">
         <div className="flex items-center space-x-2">
-          <span className="font-semibold text-neutral-900">Sample fixtures:</span>
-          <span className="text-neutral-500">Test verification states using signed demo data:</span>
+          <span className="font-bold text-neutral-950 uppercase tracking-wider text-[11px] font-mono">
+            Sample Scenarios:
+          </span>
+          <span className="text-neutral-500 hidden sm:inline">Load signed test fixtures:</span>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {fixtures.map((f) => (
@@ -296,10 +342,10 @@ export function FileVerifier() {
               key={f.id}
               type="button"
               onClick={() => selectFixture(f)}
-              className={`px-2.5 py-1 rounded text-xs transition-colors ${
+              className={`px-3 py-1 rounded text-xs transition-all duration-150 ${
                 selectedFixtureId === f.id
-                  ? "bg-black text-white font-medium"
-                  : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-100"
+                  ? "bg-neutral-950 text-white font-medium shadow-sm"
+                  : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-100 hover:text-neutral-950"
               }`}
             >
               {f.name}
@@ -308,120 +354,170 @@ export function FileVerifier() {
         </div>
       </div>
 
-      {/* Primary Verification Card */}
+      {/* Main Dual Inputs: Target File & Manifest */}
       <div className="grid md:grid-cols-2 gap-6">
-        {/* Card 1: Target File Picker */}
-        <div className="rounded-lg border border-neutral-200 bg-white p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-neutral-900 uppercase tracking-wider">
-              1. Target file
-            </h3>
-            {isDemoData && (
-              <span className="text-[11px] bg-neutral-100 text-neutral-600 px-2 py-0.5 rounded border border-neutral-200">
-                Demo fixture
-              </span>
-            )}
+        {/* Card 1: Interactive Target File Drop Zone */}
+        <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-4 shadow-sm flex flex-col justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider flex items-center space-x-1.5">
+                <span className="w-2 h-2 rounded-full bg-neutral-900" />
+                <span>1. Target File</span>
+              </h3>
+              {isDemoData ? (
+                <span className="text-[10px] bg-neutral-100 text-neutral-700 px-2 py-0.5 rounded border border-neutral-200 font-mono font-medium">
+                  Fixture
+                </span>
+              ) : (
+                <span className="text-[10px] bg-neutral-900 text-white px-2 py-0.5 rounded font-mono font-medium">
+                  Local File
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-neutral-500">
+              The artifact to be checked. Hashed locally via Web Crypto SHA-256.
+            </p>
           </div>
 
-          <div className="border border-dashed border-neutral-300 hover:border-neutral-400 rounded-lg p-6 text-center bg-neutral-50/50 transition-colors">
+          {/* Deliberate Interactive Drop Zone */}
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer ${
+              isDragging
+                ? "border-neutral-900 bg-neutral-100/70 scale-[0.99]"
+                : "border-neutral-300 hover:border-neutral-400 bg-neutral-50/60 hover:bg-neutral-50"
+            }`}
+          >
             <input
               type="file"
               id="file-upload"
               className="hidden"
-              onChange={handleFileUpload}
+              onChange={handleFileInputChange}
             />
             <label
               htmlFor="file-upload"
-              className="cursor-pointer flex flex-col items-center justify-center space-y-2 text-xs text-neutral-600 hover:text-neutral-900"
+              className="cursor-pointer flex flex-col items-center justify-center space-y-2 text-xs text-neutral-600"
             >
-              <Upload className="w-6 h-6 text-neutral-400 mb-1" />
-              <span className="font-medium text-neutral-900 text-sm">Drop file here or click to browse</span>
+              <div className="w-10 h-10 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center text-neutral-800 mb-1">
+                <Upload className="w-5 h-5" />
+              </div>
+              <span className="font-semibold text-neutral-950 text-sm">
+                Drop file here or click to browse
+              </span>
               <span className="text-[11px] text-neutral-500 max-w-xs">
-                Processed locally in your browser via Web Crypto SHA-256 — your file is never uploaded.
+                Zero upload — binary bytes never leave your browser memory.
               </span>
             </label>
           </div>
 
-          {fileName && (
-            <div className="p-3 rounded bg-neutral-50 border border-neutral-200 text-xs font-mono space-y-1">
-              <div className="text-neutral-900 truncate">
-                File: <span className="font-semibold">{fileName}</span>
+          {/* Selected File Details Strip */}
+          {fileName ? (
+            <div className="p-3.5 rounded-lg bg-neutral-50 border border-neutral-200 text-xs font-mono space-y-1">
+              <div className="text-neutral-950 font-bold truncate flex items-center justify-between">
+                <span className="truncate">{fileName}</span>
+                <span className="text-[10px] font-normal text-neutral-500 font-sans ml-2 shrink-0">
+                  {fileBytes ? formatBytes(fileBytes.byteLength) : "0 B"}
+                </span>
               </div>
-              <div className="text-neutral-500">
-                Size: {fileBytes ? `${fileBytes.byteLength.toLocaleString()} bytes` : "0 bytes"}
+              <div className="text-neutral-500 text-[10px]">
+                Ready for Web Crypto SHA-256 digest computation
               </div>
+            </div>
+          ) : (
+            <div className="p-3 rounded-lg border border-neutral-200 text-xs text-neutral-400 font-mono text-center">
+              No file selected yet
             </div>
           )}
         </div>
 
-        {/* Card 2: Release Manifest & Key */}
-        <div className="rounded-lg border border-neutral-200 bg-white p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-neutral-900 uppercase tracking-wider">
-              2. Manifest & publisher key
-            </h3>
-            <label
-              htmlFor="manifest-upload"
-              className="cursor-pointer text-xs text-neutral-900 hover:underline flex items-center space-x-1"
-            >
-              <FileCode className="w-3.5 h-3.5" />
-              <span>Upload .json</span>
+        {/* Card 2: Release Manifest & Publisher Key */}
+        <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-4 shadow-sm flex flex-col justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider flex items-center space-x-1.5">
+                <span className="w-2 h-2 rounded-full bg-neutral-900" />
+                <span>2. Manifest &amp; Key</span>
+              </h3>
+              <label
+                htmlFor="manifest-upload"
+                className="cursor-pointer text-[11px] font-medium text-neutral-900 hover:underline flex items-center space-x-1"
+              >
+                <FileCode className="w-3.5 h-3.5 text-neutral-700" />
+                <span>Upload .json</span>
+                <input
+                  type="file"
+                  id="manifest-upload"
+                  accept=".json"
+                  className="hidden"
+                  onChange={handleManifestUpload}
+                />
+              </label>
+            </div>
+            <p className="text-xs text-neutral-500">
+              Publisher-signed RFC 8785 envelope and declared Ed25519 public key.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-neutral-700">
+                Publisher Ed25519 public key (hex):
+              </label>
               <input
-                type="file"
-                id="manifest-upload"
-                accept=".json"
-                className="hidden"
-                onChange={handleManifestUpload}
+                type="text"
+                value={publisherPubKey}
+                onChange={(e) => setPublisherPubKey(e.target.value)}
+                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 text-xs font-mono text-neutral-950 focus:outline-none focus:border-neutral-950 focus:ring-1 focus:ring-neutral-950"
+                placeholder="e.g. 8580e9bff52d9f..."
               />
-            </label>
-          </div>
+            </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs text-neutral-600">
-              Publisher Ed25519 public key (hex):
-            </label>
-            <input
-              type="text"
-              value={publisherPubKey}
-              onChange={(e) => setPublisherPubKey(e.target.value)}
-              className="w-full rounded bg-white border border-neutral-200 px-3 py-1.5 text-xs font-mono text-neutral-900 focus:outline-none focus:border-neutral-900"
-              placeholder="e.g. 8580e9bff52d9f..."
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs text-neutral-600">Signed manifest JSON:</label>
-            <textarea
-              rows={4}
-              value={manifestText}
-              onChange={(e) => setManifestText(e.target.value)}
-              className="w-full rounded bg-white border border-neutral-200 p-2.5 text-[11px] font-mono text-neutral-800 focus:outline-none focus:border-neutral-900 resize-none"
-              placeholder="Paste RFC 8785 signed manifest JSON..."
-            />
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-neutral-700">Signed manifest JSON:</label>
+              <textarea
+                rows={4}
+                value={manifestText}
+                onChange={(e) => setManifestText(e.target.value)}
+                className="w-full rounded-md bg-white border border-neutral-200 p-2.5 text-[11px] font-mono text-neutral-900 focus:outline-none focus:border-neutral-950 focus:ring-1 focus:ring-neutral-950 resize-none"
+                placeholder="Paste RFC 8785 signed manifest JSON..."
+              />
+            </div>
           </div>
         </div>
       </div>
 
       {/* Verify Action Button */}
-      <div className="flex flex-col items-center justify-center space-y-2">
+      <div className="flex flex-col items-center justify-center space-y-2 pt-2">
         <button
           type="button"
           onClick={handleRunVerification}
           disabled={isVerifying || !fileBytes}
-          className="px-6 py-2.5 rounded-md bg-black text-white hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 font-medium text-sm transition-colors flex items-center space-x-2"
+          className="px-8 py-3.5 rounded-lg bg-neutral-950 hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 text-white font-semibold text-sm transition-all shadow-md active:scale-[0.99] flex items-center space-x-2"
         >
-          <span>{isVerifying ? "Verifying file..." : "Verify file"}</span>
+          {isVerifying ? (
+            <>
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              <span>Verifying release...</span>
+            </>
+          ) : (
+            <>
+              <ShieldCheck className="w-4 h-4" />
+              <span>Verify file</span>
+            </>
+          )}
         </button>
 
         {isVerifying && (
-          <div className="text-xs text-neutral-500 animate-pulse">
+          <div className="text-xs font-mono text-neutral-600 animate-pulse">
             {verifyingStep || "Processing..."}
           </div>
         )}
       </div>
 
       {errorMessage && (
-        <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-900 text-xs flex items-center space-x-2">
+        <div className="p-4 rounded-lg bg-red-50 border border-red-300 text-red-950 text-xs flex items-center space-x-2.5">
           <X className="w-4 h-4 text-red-700 shrink-0" />
           <span>{errorMessage}</span>
         </div>
@@ -429,124 +525,223 @@ export function FileVerifier() {
 
       {/* Verification Result Display */}
       {verdict && (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Top-Level High-Contrast Verdict Banner */}
           {(() => {
             const banner = getBannerConfig(verdict);
             return (
-              <div className={`p-5 rounded-lg border ${banner.style} space-y-3`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
+              <div className={`p-6 rounded-xl border ${banner.style} space-y-3 shadow-sm`}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center space-x-2.5">
                     {banner.icon}
-                    <h3 className="text-base font-bold tracking-tight">{banner.title}</h3>
+                    <h2 className="text-lg font-bold tracking-tight">{banner.title}</h2>
                   </div>
-                  <span className={`px-2.5 py-0.5 rounded text-[11px] font-mono font-medium border ${banner.badgeStyle}`}>
+                  <span
+                    className={`px-3 py-1 rounded text-xs font-mono font-bold border ${banner.badgeStyle}`}
+                  >
                     {verdict.status}
                   </span>
                 </div>
-                <p className="text-xs leading-relaxed">{banner.summary}</p>
+                <p className="text-xs sm:text-sm leading-relaxed max-w-3xl font-medium">
+                  {banner.summary}
+                </p>
               </div>
             );
           })()}
 
-          {/* 3 Clean Structured Check Rows */}
-          <div className="rounded-lg border border-neutral-200 bg-white overflow-hidden divide-y divide-neutral-100">
+          {/* Structured 5-Check Differentiated Sections */}
+          <div className="rounded-xl border border-neutral-200 bg-white overflow-hidden shadow-sm divide-y divide-neutral-200">
             {/* Check 1: File integrity */}
-            <div className="p-4 flex items-center justify-between">
-              <div className="space-y-0.5">
-                <div className="text-xs font-semibold text-neutral-900">1. File integrity</div>
-                <p className="text-xs text-neutral-500">
-                  Computed SHA-256 vs. reference manifest digest
+            <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <span className="w-6 h-6 rounded bg-neutral-100 border border-neutral-200 flex items-center justify-center text-xs font-bold font-mono text-neutral-800">
+                    1
+                  </span>
+                  <span className="text-xs font-bold text-neutral-950 uppercase tracking-wider">
+                    File integrity
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-600 pl-8">
+                  Computed whole-file SHA-256 digest vs. expected manifest declaration
                 </p>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="pl-8 sm:pl-0">
                 {verdict.fileIntegrity.status === "MATCH" ? (
-                  <span className="inline-flex items-center space-x-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Exact match</span>
+                  <span className="inline-flex items-center space-x-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1 rounded border border-emerald-200">
+                    <Check className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Exact SHA-256 match</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center space-x-1 text-xs font-medium text-red-700 bg-red-50 px-2.5 py-1 rounded border border-red-200">
-                    <X className="w-3.5 h-3.5" />
-                    <span>Mismatch</span>
+                  <span className="inline-flex items-center space-x-1.5 text-xs font-semibold text-red-800 bg-red-50 px-3 py-1 rounded border border-red-200">
+                    <X className="w-3.5 h-3.5 text-red-700" />
+                    <span>Checksum mismatch</span>
                   </span>
                 )}
               </div>
             </div>
 
             {/* Check 2: Publisher authenticity */}
-            <div className="p-4 flex items-center justify-between">
-              <div className="space-y-0.5">
-                <div className="text-xs font-semibold text-neutral-900">2. Publisher authenticity</div>
-                <p className="text-xs text-neutral-500">
-                  Ed25519 signature over canonical RFC 8785 manifest payload
+            <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <span className="w-6 h-6 rounded bg-neutral-100 border border-neutral-200 flex items-center justify-center text-xs font-bold font-mono text-neutral-800">
+                    2
+                  </span>
+                  <span className="text-xs font-bold text-neutral-950 uppercase tracking-wider">
+                    Publisher signature
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-600 pl-8">
+                  Ed25519 signature verified over canonical RFC 8785 JSON manifest envelope
                 </p>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="pl-8 sm:pl-0">
                 {verdict.signatureVerification.isValid ? (
-                  <span className="inline-flex items-center space-x-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">
-                    <Check className="w-3.5 h-3.5" />
+                  <span className="inline-flex items-center space-x-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1 rounded border border-emerald-200">
+                    <Check className="w-3.5 h-3.5 text-emerald-700" />
                     <span>Signature valid</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center space-x-1 text-xs font-medium text-red-700 bg-red-50 px-2.5 py-1 rounded border border-red-200">
-                    <X className="w-3.5 h-3.5" />
-                    <span>Invalid signature</span>
+                  <span className="inline-flex items-center space-x-1.5 text-xs font-semibold text-red-800 bg-red-50 px-3 py-1 rounded border border-red-200">
+                    <X className="w-3.5 h-3.5 text-red-700" />
+                    <span>Signature invalid</span>
                   </span>
                 )}
               </div>
             </div>
 
-            {/* Check 3: Registry status */}
-            <div className="p-4 flex items-center justify-between">
-              <div className="space-y-0.5">
-                <div className="text-xs font-semibold text-neutral-900">3. Registry status</div>
-                <p className="text-xs text-neutral-500">
-                  On-chain record registered on Monad Testnet
+            {/* Check 3: Publisher key authorization */}
+            <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <span className="w-6 h-6 rounded bg-neutral-100 border border-neutral-200 flex items-center justify-center text-xs font-bold font-mono text-neutral-800">
+                    3
+                  </span>
+                  <span className="text-xs font-bold text-neutral-950 uppercase tracking-wider">
+                    Publisher authorization
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-600 pl-8">
+                  Publisher signing key authorization registered on Monad Testnet contract
                 </p>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="pl-8 sm:pl-0">
+                {verdict.status === "UNAUTHORIZED_KEY" ? (
+                  <span className="inline-flex items-center space-x-1.5 text-xs font-semibold text-amber-800 bg-amber-50 px-3 py-1 rounded border border-amber-200">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Key not authorized</span>
+                  </span>
+                ) : verdict.releaseRecord ? (
+                  <span className="inline-flex items-center space-x-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1 rounded border border-emerald-200">
+                    <Check className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Authorized publisher</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center space-x-1.5 text-xs font-medium text-neutral-700 bg-neutral-100 px-3 py-1 rounded border border-neutral-200">
+                    <span>Unregistered publisher</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Check 4: Registry and release status */}
+            <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <span className="w-6 h-6 rounded bg-neutral-100 border border-neutral-200 flex items-center justify-center text-xs font-bold font-mono text-neutral-800">
+                    4
+                  </span>
+                  <span className="text-xs font-bold text-neutral-950 uppercase tracking-wider">
+                    Registry &amp; release status
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-600 pl-8">
+                  On-chain lifecycle commitment in SwarmTraceRegistry on Monad Testnet
+                </p>
+              </div>
+              <div className="pl-8 sm:pl-0">
                 {verdict.releaseRecord?.status === "ACTIVE" ? (
-                  <span className="inline-flex items-center space-x-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">
-                    <Check className="w-3.5 h-3.5" />
+                  <span className="inline-flex items-center space-x-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1 rounded border border-emerald-200">
+                    <Check className="w-3.5 h-3.5 text-emerald-700" />
                     <span>Active on-chain</span>
                   </span>
                 ) : verdict.releaseRecord?.status === "REVOKED" ? (
-                  <span className="inline-flex items-center space-x-1 text-xs font-medium text-red-700 bg-red-50 px-2.5 py-1 rounded border border-red-200">
-                    <X className="w-3.5 h-3.5" />
+                  <span className="inline-flex items-center space-x-1.5 text-xs font-semibold text-red-800 bg-red-50 px-3 py-1 rounded border border-red-200">
+                    <X className="w-3.5 h-3.5 text-red-700" />
                     <span>Revoked on-chain</span>
                   </span>
+                ) : verdict.releaseRecord?.status === "SUPERSEDED" ? (
+                  <span className="inline-flex items-center space-x-1.5 text-xs font-semibold text-neutral-800 bg-neutral-100 px-3 py-1 rounded border border-neutral-300">
+                    <Info className="w-3.5 h-3.5 text-neutral-600" />
+                    <span>Superseded on-chain</span>
+                  </span>
                 ) : (
-                  <span className="inline-flex items-center space-x-1 text-xs font-medium text-neutral-600 bg-neutral-100 px-2.5 py-1 rounded border border-neutral-200">
-                    <span>{verdict.releaseRecord?.status ?? "Unregistered"}</span>
+                  <span className="inline-flex items-center space-x-1.5 text-xs font-medium text-neutral-700 bg-neutral-100 px-3 py-1 rounded border border-neutral-200">
+                    <span>Unregistered release</span>
                   </span>
                 )}
               </div>
             </div>
+
+            {/* Check 5: Piece-level integrity (if chunk details available) */}
+            {verdict.fileIntegrity.chunksTotal !== undefined && verdict.fileIntegrity.chunksTotal > 0 && (
+              <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="w-6 h-6 rounded bg-neutral-100 border border-neutral-200 flex items-center justify-center text-xs font-bold font-mono text-neutral-800">
+                      5
+                    </span>
+                    <span className="text-xs font-bold text-neutral-950 uppercase tracking-wider">
+                      Piece-level integrity
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-600 pl-8">
+                    Chunk-by-chunk SHA-256 verification against manifest declarations
+                  </p>
+                </div>
+                <div className="pl-8 sm:pl-0">
+                  {verdict.fileIntegrity.chunksMatched === verdict.fileIntegrity.chunksTotal ? (
+                    <span className="inline-flex items-center space-x-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1 rounded border border-emerald-200">
+                      <Check className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>{verdict.fileIntegrity.chunksTotal} of {verdict.fileIntegrity.chunksTotal} matched</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center space-x-1.5 text-xs font-semibold text-red-800 bg-red-50 px-3 py-1 rounded border border-red-200">
+                      <X className="w-3.5 h-3.5 text-red-700" />
+                      <span>
+                        {(verdict.fileIntegrity.chunksTotal ?? 0) - (verdict.fileIntegrity.chunksMatched ?? 0)} altered pieces
+                      </span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Expandable Technical Details Disclosure */}
-          <details className="group rounded-lg border border-neutral-200 bg-white p-4 space-y-4">
-            <summary className="cursor-pointer text-xs font-semibold text-neutral-900 uppercase tracking-wider flex items-center justify-between list-none">
-              <span>Technical details & cryptographic evidence</span>
-              <span className="text-neutral-400 group-open:rotate-180 transition-transform">
-                <ChevronDown className="w-4 h-4" />
+          {/* High-Contrast Selective Dark Surface for Technical Identifiers */}
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950 text-white p-5 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <span className="text-xs font-mono font-semibold uppercase tracking-wider text-neutral-400">
+                Cryptographic Identifiers &amp; Evidence
               </span>
-            </summary>
+              <span className="text-[11px] font-mono text-neutral-500">SHA-256 · Ed25519 · keccak256</span>
+            </div>
 
-            <div className="pt-4 border-t border-neutral-100 space-y-4 text-xs">
-              {/* Hashes breakdown */}
-              <div className="space-y-2">
-                <div className="text-neutral-500 font-medium">Computed file SHA-256:</div>
-                <div className="flex items-center justify-between p-2 rounded bg-neutral-50 border border-neutral-200 font-mono text-[11px] text-neutral-900 gap-2">
-                  <span className="truncate">{verdict.fileIntegrity.computedSha256}</span>
+            <div className="space-y-3 text-xs">
+              {/* Computed Hash */}
+              <div className="space-y-1">
+                <div className="text-[11px] text-neutral-400 font-sans">Computed File SHA-256 (Local Web Crypto):</div>
+                <div className="flex items-center justify-between p-2.5 rounded bg-neutral-900 border border-neutral-800 font-mono text-[11px] gap-2">
+                  <span className="truncate text-emerald-400">{verdict.fileIntegrity.computedSha256}</span>
                   <button
                     type="button"
                     onClick={() => copyText("computedSha256", verdict.fileIntegrity.computedSha256)}
-                    className="text-neutral-400 hover:text-neutral-900 shrink-0 p-1"
-                    title="Copy hash"
+                    className="text-neutral-400 hover:text-white shrink-0 p-0.5"
+                    title="Copy computed hash"
                   >
                     {copiedKey === "computedSha256" ? (
-                      <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
+                      <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
                     ) : (
                       <Copy className="w-3.5 h-3.5" />
                     )}
@@ -554,19 +749,20 @@ export function FileVerifier() {
                 </div>
               </div>
 
+              {/* Expected Hash */}
               {verdict.fileIntegrity.expectedSha256 && (
-                <div className="space-y-2">
-                  <div className="text-neutral-500 font-medium">Expected manifest SHA-256:</div>
-                  <div className="flex items-center justify-between p-2 rounded bg-neutral-50 border border-neutral-200 font-mono text-[11px] text-neutral-900 gap-2">
-                    <span className="truncate">{verdict.fileIntegrity.expectedSha256}</span>
+                <div className="space-y-1">
+                  <div className="text-[11px] text-neutral-400 font-sans">Expected Manifest SHA-256:</div>
+                  <div className="flex items-center justify-between p-2.5 rounded bg-neutral-900 border border-neutral-800 font-mono text-[11px] gap-2">
+                    <span className="truncate text-neutral-200">{verdict.fileIntegrity.expectedSha256}</span>
                     <button
                       type="button"
                       onClick={() => copyText("expectedSha256", verdict.fileIntegrity.expectedSha256 || "")}
-                      className="text-neutral-400 hover:text-neutral-900 shrink-0 p-1"
-                      title="Copy hash"
+                      className="text-neutral-400 hover:text-white shrink-0 p-0.5"
+                      title="Copy expected hash"
                     >
                       {copiedKey === "expectedSha256" ? (
-                        <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
                       ) : (
                         <Copy className="w-3.5 h-3.5" />
                       )}
@@ -575,18 +771,19 @@ export function FileVerifier() {
                 </div>
               )}
 
-              <div className="space-y-2">
-                <div className="text-neutral-500 font-medium">Publisher public key:</div>
-                <div className="flex items-center justify-between p-2 rounded bg-neutral-50 border border-neutral-200 font-mono text-[11px] text-neutral-900 gap-2">
-                  <span className="truncate">{verdict.signatureVerification.publicKeyUsed}</span>
+              {/* Publisher Public Key */}
+              <div className="space-y-1">
+                <div className="text-[11px] text-neutral-400 font-sans">Publisher Ed25519 Public Key:</div>
+                <div className="flex items-center justify-between p-2.5 rounded bg-neutral-900 border border-neutral-800 font-mono text-[11px] gap-2">
+                  <span className="truncate text-neutral-300">{verdict.signatureVerification.publicKeyUsed}</span>
                   <button
                     type="button"
                     onClick={() => copyText("pubKey", verdict.signatureVerification.publicKeyUsed)}
-                    className="text-neutral-400 hover:text-neutral-900 shrink-0 p-1"
-                    title="Copy key"
+                    className="text-neutral-400 hover:text-white shrink-0 p-0.5"
+                    title="Copy publisher key"
                   >
                     {copiedKey === "pubKey" ? (
-                      <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
+                      <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
                     ) : (
                       <Copy className="w-3.5 h-3.5" />
                     )}
@@ -594,26 +791,61 @@ export function FileVerifier() {
                 </div>
               </div>
 
-              {/* Piece Matrix if available */}
-              {verdict.fileIntegrity.chunkDetails && verdict.fileIntegrity.chunkDetails.length > 0 && (
-                <div className="pt-2">
-                  <ChunkMatrix
-                    chunkDetails={verdict.fileIntegrity.chunkDetails}
-                    chunkSize={activeManifest?.chunkSize ?? 16}
-                    totalChunks={verdict.fileIntegrity.chunksTotal ?? 0}
-                    matchedChunks={verdict.fileIntegrity.chunksMatched ?? 0}
-                  />
+              {/* Monad Registry Commitment Digest */}
+              {verdict.releaseRecord && (
+                <div className="space-y-1">
+                  <div className="text-[11px] text-neutral-400 font-sans">Monad On-Chain Release Digest:</div>
+                  <div className="flex items-center justify-between p-2.5 rounded bg-neutral-900 border border-neutral-800 font-mono text-[11px] gap-2">
+                    <span className="truncate text-neutral-300">{verdict.releaseRecord.releaseDigest}</span>
+                    <button
+                      type="button"
+                      onClick={() => copyText("regDigest", verdict.releaseRecord?.releaseDigest || "")}
+                      className="text-neutral-400 hover:text-white shrink-0 p-0.5"
+                      title="Copy release digest"
+                    >
+                      {copiedKey === "regDigest" ? (
+                        <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Piece Matrix component if chunk details exist */}
+          {verdict.fileIntegrity.chunkDetails && verdict.fileIntegrity.chunkDetails.length > 0 && (
+            <ChunkMatrix
+              chunkDetails={verdict.fileIntegrity.chunkDetails}
+              chunkSize={activeManifest?.chunkSize ?? 16}
+              totalChunks={verdict.fileIntegrity.chunksTotal ?? 0}
+              matchedChunks={verdict.fileIntegrity.chunksMatched ?? 0}
+            />
+          )}
+
+          {/* Expandable Advanced Disclosure */}
+          <details className="group rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
+            <summary className="cursor-pointer text-xs font-mono font-semibold text-neutral-900 uppercase tracking-wider flex items-center justify-between list-none">
+              <span>Inspect Canonical Manifest Envelope (RFC 8785 JSON)</span>
+              <span className="text-neutral-400 group-open:rotate-180 transition-transform">
+                <ChevronDown className="w-4 h-4" />
+              </span>
+            </summary>
+            <div className="pt-3 border-t border-neutral-100 mt-3 space-y-2">
+              <pre className="p-3 rounded-lg bg-neutral-50 border border-neutral-200 text-[11px] font-mono text-neutral-800 overflow-x-auto max-h-56">
+                {manifestText}
+              </pre>
             </div>
           </details>
 
           {/* Caveats note */}
           {verdict.caveats && verdict.caveats.length > 0 && (
-            <div className="p-4 rounded-lg border border-neutral-200 bg-neutral-50 space-y-2 text-xs">
-              <div className="font-semibold text-neutral-900 flex items-center space-x-1.5">
-                <Info className="w-4 h-4 text-neutral-500" />
-                <span>Verification scope and limits</span>
+            <div className="p-4 rounded-lg border-l-4 border-l-neutral-950 border border-neutral-200 bg-neutral-50 space-y-1.5 text-xs">
+              <div className="font-bold text-neutral-950 flex items-center space-x-1.5">
+                <Info className="w-4 h-4 text-neutral-700" />
+                <span>Verification Scope &amp; Limits</span>
               </div>
               <ul className="space-y-1 text-neutral-600 list-disc list-inside">
                 {verdict.caveats.map((c, i) => (
