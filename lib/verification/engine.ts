@@ -16,6 +16,7 @@ export interface VerifyFileOptions {
   manifest: SignedReleaseManifest;
   publisherPublicKeyHex: string;
   onChainRecord?: ReleaseRecord | null;
+  authorizedPublisherPubKeyHex?: string | null;
 }
 
 /**
@@ -24,7 +25,14 @@ export interface VerifyFileOptions {
 export async function verifyFileAgainstManifest(
   options: VerifyFileOptions
 ): Promise<VerificationVerdict> {
-  const { fileBytes, fileName, manifest, publisherPublicKeyHex, onChainRecord } = options;
+  const {
+    fileBytes,
+    fileName,
+    manifest,
+    publisherPublicKeyHex,
+    onChainRecord,
+    authorizedPublisherPubKeyHex,
+  } = options;
 
   const explanations: string[] = [];
   const caveats: string[] = [
@@ -35,9 +43,23 @@ export async function verifyFileAgainstManifest(
 
   // 1. Verify Manifest Signature
   const signatureResult = await verifyManifestSignature(manifest, publisherPublicKeyHex);
+
+  // Cross-check publisher key authorization against Monad registry binding
+  if (signatureResult.isValid && authorizedPublisherPubKeyHex) {
+    const normAuthorized = authorizedPublisherPubKeyHex.toLowerCase().replace(/^0x/, "");
+    const normUsed = publisherPublicKeyHex.toLowerCase().replace(/^0x/, "");
+    if (normAuthorized !== normUsed) {
+      signatureResult.isValid = false;
+      signatureResult.status = "KEY_UNAUTHORIZED";
+      signatureResult.message = `The key used to verify the manifest (${normUsed.slice(0, 10)}...) is not the authorized signing key registered on Monad (${normAuthorized.slice(0, 10)}...).`;
+    }
+  }
+
   if (!signatureResult.isValid) {
     explanations.push(
-      `Manifest signature verification failed against publisher key (${publisherPublicKeyHex.slice(0, 10)}...). The manifest is invalid or was altered.`
+      signatureResult.status === "KEY_UNAUTHORIZED"
+        ? signatureResult.message
+        : `Manifest signature verification failed against publisher key (${publisherPublicKeyHex.slice(0, 10)}...). The manifest is invalid or was altered.`
     );
   } else {
     explanations.push(
@@ -105,17 +127,50 @@ export async function verifyFileAgainstManifest(
     explanations.push("Computed whole-file SHA-256 differs from expected manifest reference.");
   }
 
-  // 4. On-chain Record Evaluation
+  // 4. On-chain Record Evaluation & Strict Cryptographic Binding Check
   let onChainStatus: "ACTIVE" | "SUPERSEDED" | "REVOKED" | "UNKNOWN" = "UNKNOWN";
   if (onChainRecord) {
-    onChainStatus = onChainRecord.status;
-    explanations.push(
-      `On-chain release record retrieved from Monad Testnet: Status is ${onChainStatus}.`
-    );
-    if (onChainStatus === "REVOKED") {
+    const normRecordFileHash = onChainRecord.fileHash.toLowerCase().replace(/^0x/, "");
+    const normManifestFileHash = manifest.sha256.toLowerCase().replace(/^0x/, "");
+    const isFileHashBound = normRecordFileHash === normManifestFileHash;
+
+    const isPublisherBound = onChainRecord.publisherId === manifest.publisherId;
+    const isProductBound = onChainRecord.productId === manifest.productId;
+    const isVersionBound = onChainRecord.releaseVersion === manifest.releaseVersion;
+
+    const normRecordManifestDigest = onChainRecord.manifestDigest.toLowerCase().replace(/^0x/, "");
+    const normComputedManifestDigest = signatureResult.computedManifestDigest.toLowerCase().replace(/^0x/, "");
+    const isManifestDigestBound =
+      !normRecordManifestDigest ||
+      normRecordManifestDigest === "0000000000000000000000000000000000000000000000000000000000000000" ||
+      normRecordManifestDigest === normComputedManifestDigest;
+
+    const isCryptographicallyBound =
+      isFileHashBound && isPublisherBound && isProductBound && isVersionBound && isManifestDigestBound;
+
+    if (!isCryptographicallyBound) {
+      onChainStatus = "UNKNOWN";
       explanations.push(
-        `WARNING: Release was revoked on-chain by the publisher. Reason: "${onChainRecord.revokeReason || "No reason specified"}".`
+        `Security alert: On-chain release record rejected due to cryptographic tuple mismatch (${
+          !isFileHashBound
+            ? "fileHash differs from manifest"
+            : !isPublisherBound
+            ? "publisherId mismatch"
+            : !isManifestDigestBound
+            ? "manifestDigest mismatch"
+            : "productId/version mismatch"
+        }).`
       );
+    } else {
+      onChainStatus = onChainRecord.status;
+      explanations.push(
+        `On-chain release record verified on Monad Testnet: Status is ${onChainStatus}.`
+      );
+      if (onChainStatus === "REVOKED") {
+        explanations.push(
+          `WARNING: Release was revoked on-chain by the publisher. Reason: "${onChainRecord.revokeReason || "No reason specified"}".`
+        );
+      }
     }
   } else {
     explanations.push("No corresponding release commitment was found on Monad Testnet.");

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   KeyRound,
   ShieldCheck,
@@ -11,15 +11,24 @@ import {
   CheckCircle2,
   RefreshCw,
   Info,
+  Wallet,
+  AlertTriangle,
 } from "lucide-react";
-import { calculateReleaseDigest, getRegistryAddress } from "@/lib/chain/contract";
-import { DEMO_PUBLISHER, DEMO_MONAD_PUBLISHER } from "@/lib/demo-data/fixtures";
+import { createWalletClient, custom } from "viem";
+import { monadTestnet } from "@/lib/chain/monad";
+import {
+  calculateReleaseDigest,
+  getRegistryAddress,
+  checkPublisherAuthorization,
+  SWARMTRACE_REGISTRY_ABI,
+} from "@/lib/chain/contract";
+import { DEMO_PUBLISHER } from "@/lib/demo-data/fixtures";
 
 export function PublisherPortal() {
-  const [publisherAddress, setPublisherAddress] = useState<string>(
-    DEMO_PUBLISHER.publisherAddress
-  );
-  const [authStatus, setAuthStatus] = useState<"AUTHORIZED" | "UNAUTHORIZED" | "PENDING">("AUTHORIZED");
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [chainId, setChainId] = useState<number | null>(null);
+  const [isAuthorized, setIsAuthorized] = useState<boolean>(true);
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(false);
 
   // Registration form
   const [regPublisherId, setRegPublisherId] = useState<string>("canonical-ubuntu");
@@ -45,6 +54,102 @@ export function PublisherPortal() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const contractAddress = getRegistryAddress();
+  const isContractConfigured =
+    contractAddress !== "0x0000000000000000000000000000000000000000";
+
+  // Check wallet connection on mount
+  useEffect(() => {
+    async function checkWallet() {
+      if (typeof window !== "undefined" && (window as any).ethereum) {
+        try {
+          const ethereum = (window as any).ethereum;
+          const accounts = await ethereum.request({ method: "eth_accounts" });
+          if (accounts && accounts.length > 0) {
+            setWalletAddress(accounts[0]);
+          }
+          const currentChainId = await ethereum.request({ method: "eth_chainId" });
+          setChainId(parseInt(currentChainId, 16));
+        } catch {
+          // Silent fallback
+        }
+      }
+    }
+    checkWallet();
+  }, []);
+
+  // Check publisher authorization if wallet & contract configured
+  useEffect(() => {
+    async function checkAuth() {
+      if (walletAddress && isContractConfigured) {
+        setIsCheckingAuth(true);
+        const authorized = await checkPublisherAuthorization(walletAddress as `0x${string}`);
+        setIsAuthorized(authorized);
+        setIsCheckingAuth(false);
+      }
+    }
+    checkAuth();
+  }, [walletAddress, isContractConfigured]);
+
+  async function connectWallet() {
+    if (typeof window === "undefined" || !(window as any).ethereum) {
+      setStatusMessage("No Web3 wallet extension detected in this browser.");
+      return;
+    }
+    try {
+      const ethereum = (window as any).ethereum;
+      const accounts = await ethereum.request({ method: "eth_requestAccounts" });
+      if (accounts && accounts.length > 0) {
+        setWalletAddress(accounts[0]);
+      }
+      const currentChainId = await ethereum.request({ method: "eth_chainId" });
+      setChainId(parseInt(currentChainId, 16));
+      setStatusMessage("Wallet connected successfully.");
+    } catch (err: any) {
+      if (err.code === 4001) {
+        setStatusMessage("Connection request cancelled by user.");
+      } else {
+        setStatusMessage("Wallet connection error: " + err.message);
+      }
+    }
+  }
+
+  async function switchToMonadTestnet() {
+    if (typeof window === "undefined" || !(window as any).ethereum) return;
+    const ethereum = (window as any).ethereum;
+    try {
+      await ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: "0x279f" }], // 10143
+      });
+      setChainId(10143);
+      setStatusMessage("Switched to Monad Testnet (Chain ID 10143).");
+    } catch (switchError: any) {
+      if (switchError.code === 4902) {
+        // Add chain
+        try {
+          await ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [
+              {
+                chainId: "0x279f",
+                chainName: "Monad Testnet",
+                nativeCurrency: { name: "Monad", symbol: "MON", decimals: 18 },
+                rpcUrls: ["https://testnet-rpc.monad.xyz"],
+                blockExplorerUrls: ["https://testnet.monadscan.com"],
+              },
+            ],
+          });
+          setChainId(10143);
+        } catch (addError: any) {
+          setStatusMessage("Failed to add Monad Testnet: " + addError.message);
+        }
+      } else if (switchError.code === 4001) {
+        setStatusMessage("Network switch rejected by user.");
+      } else {
+        setStatusMessage("Network switch error: " + switchError.message);
+      }
+    }
+  }
 
   // Calculated preview digest
   const computedPreviewDigest = calculateReleaseDigest(
@@ -59,25 +164,52 @@ export function PublisherPortal() {
     e.preventDefault();
     setIsSubmitting(true);
     setStatusMessage(null);
+    setRegTxHash(null);
 
     try {
-      // Check if browser has window.ethereum
-      if (typeof window !== "undefined" && (window as any).ethereum) {
-        // Here we could trigger a real contract write if deployed
+      if (!isContractConfigured) {
         setStatusMessage(
-          `Simulated Monad Testnet commitment generated for release digest: ${computedPreviewDigest}`
+          `Local Simulation: Deterministic release commitment computed for Monad Testnet. State key: ${computedPreviewDigest}. Contract address not configured in environment.`
         );
-      } else {
-        setStatusMessage(
-          `Release commitment calculated for Monad Testnet (Chain ID 10143). Registry Address: ${contractAddress}.`
-        );
+        return;
       }
-      // Demo transaction reference
-      setRegTxHash(
-        "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("")
-      );
-    } catch (err) {
-      setStatusMessage("Registration error: " + (err as Error).message);
+
+      if (!walletAddress || typeof window === "undefined" || !(window as any).ethereum) {
+        setStatusMessage("Please connect a Web3 wallet to broadcast on Monad Testnet.");
+        return;
+      }
+
+      if (chainId !== 10143) {
+        await switchToMonadTestnet();
+      }
+
+      const client = createWalletClient({
+        chain: monadTestnet,
+        transport: custom((window as any).ethereum),
+      });
+
+      const hash = await client.writeContract({
+        address: contractAddress,
+        abi: SWARMTRACE_REGISTRY_ABI,
+        functionName: "registerRelease",
+        args: [
+          regProductId,
+          regVersion,
+          regFileHash as `0x${string}`,
+          regManifestDigest as `0x${string}`,
+          "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`,
+        ],
+        account: walletAddress as `0x${string}`,
+      });
+
+      setRegTxHash(hash);
+      setStatusMessage(`Transaction submitted to Monad Testnet! Tx Hash: ${hash}`);
+    } catch (err: any) {
+      if (err.code === 4001 || err.message?.includes("User rejected")) {
+        setStatusMessage("Transaction was rejected by the user in wallet.");
+      } else {
+        setStatusMessage("Registration error: " + err.message);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -92,16 +224,46 @@ export function PublisherPortal() {
 
     setIsSubmitting(true);
     setStatusMessage(null);
+    setRevokeTxHash(null);
 
     try {
-      setStatusMessage(
-        `Revocation commitment prepared for digest ${revokeDigest.slice(0, 16)}... Reason: "${revokeReason}".`
-      );
-      setRevokeTxHash(
-        "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("")
-      );
-    } catch (err) {
-      setStatusMessage("Revocation error: " + (err as Error).message);
+      if (!isContractConfigured) {
+        setStatusMessage(
+          `Local Simulation: Revocation prepared for digest ${revokeDigest.slice(0, 16)}... Reason: "${revokeReason}". Contract address not configured in environment.`
+        );
+        return;
+      }
+
+      if (!walletAddress || typeof window === "undefined" || !(window as any).ethereum) {
+        setStatusMessage("Please connect a Web3 wallet to broadcast revocation on Monad Testnet.");
+        return;
+      }
+
+      if (chainId !== 10143) {
+        await switchToMonadTestnet();
+      }
+
+      const client = createWalletClient({
+        chain: monadTestnet,
+        transport: custom((window as any).ethereum),
+      });
+
+      const hash = await client.writeContract({
+        address: contractAddress,
+        abi: SWARMTRACE_REGISTRY_ABI,
+        functionName: "revokeRelease",
+        args: [revokeDigest as `0x${string}`, revokeReason],
+        account: walletAddress as `0x${string}`,
+      });
+
+      setRevokeTxHash(hash);
+      setStatusMessage(`Revocation submitted to Monad Testnet! Tx Hash: ${hash}`);
+    } catch (err: any) {
+      if (err.code === 4001 || err.message?.includes("User rejected")) {
+        setStatusMessage("Revocation was rejected by the user in wallet.");
+      } else {
+        setStatusMessage("Revocation error: " + err.message);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -122,22 +284,48 @@ export function PublisherPortal() {
             </h3>
           </div>
 
-          <div className="flex items-center space-x-2">
-            <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-800 flex items-center space-x-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>AUTHORIZED PUBLISHER</span>
-            </span>
+          <div className="flex items-center space-x-3">
+            {walletAddress ? (
+              <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-800 flex items-center space-x-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>CONNECTED: {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</span>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={connectWallet}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-cyan-600 hover:bg-cyan-500 text-white flex items-center space-x-1.5 transition-colors"
+              >
+                <Wallet className="w-3.5 h-3.5" />
+                <span>Connect Wallet</span>
+              </button>
+            )}
+
+            {chainId && chainId !== 10143 && (
+              <button
+                type="button"
+                onClick={switchToMonadTestnet}
+                className="px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-950 text-amber-300 border border-amber-800 flex items-center space-x-1"
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <span>Switch to Monad (10143)</span>
+              </button>
+            )}
           </div>
         </div>
 
         <div className="grid sm:grid-cols-2 gap-4 pt-2 text-xs font-mono">
           <div className="p-3 rounded-xl bg-gray-950 border border-gray-800 space-y-1">
-            <div className="text-gray-400 font-sans">Connected Publisher Address:</div>
-            <div className="text-cyan-300 truncate">{publisherAddress}</div>
+            <div className="text-gray-400 font-sans">Active Publisher Address:</div>
+            <div className="text-cyan-300 truncate">
+              {walletAddress || DEMO_PUBLISHER.publisherAddress}
+            </div>
           </div>
           <div className="p-3 rounded-xl bg-gray-950 border border-gray-800 space-y-1">
             <div className="text-gray-400 font-sans">SwarmTrace Registry Address:</div>
-            <div className="text-purple-300 truncate">{contractAddress}</div>
+            <div className="text-purple-300 truncate">
+              {isContractConfigured ? contractAddress : "Unset (Awaiting Testnet Deployment)"}
+            </div>
           </div>
         </div>
       </div>

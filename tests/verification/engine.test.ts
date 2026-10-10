@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { verifyFileAgainstManifest } from "@/lib/verification/engine";
 import { generateEd25519KeyPair, signEd25519Message } from "@/lib/crypto/ed25519";
 import { canonicalizeRfc8785 } from "@/lib/crypto/canonicalize";
-import { sha256Bytes, hashChunks } from "@/lib/crypto/hashing";
+import { sha256Bytes, hashChunks, sha256Text } from "@/lib/crypto/hashing";
 import type {
   SignedReleaseManifest,
   ReleaseManifestPayload,
@@ -13,7 +13,10 @@ describe("Live Swarm Integrity Verification Engine", () => {
   const keyPair = generateEd25519KeyPair();
   const testFileBytes = new TextEncoder().encode("Hello SwarmTrace Monad Testnet!");
 
-  async function createSignedManifest(bytes: Uint8Array): Promise<SignedReleaseManifest> {
+  async function createSignedManifest(bytes: Uint8Array): Promise<{
+    manifest: SignedReleaseManifest;
+    manifestDigest: string;
+  }> {
     const fileSha256 = await sha256Bytes(bytes);
     const { chunkHashes } = await hashChunks(bytes, 16);
 
@@ -32,15 +35,19 @@ describe("Live Swarm Integrity Verification Engine", () => {
 
     const canonical = canonicalizeRfc8785(payload);
     const signature = signEd25519Message(canonical, keyPair.privateKeyHex);
+    const manifestDigest = await sha256Text(canonical);
 
     return {
-      ...payload,
-      signature,
+      manifest: {
+        ...payload,
+        signature,
+      },
+      manifestDigest,
     };
   }
 
   it("verifies authentic file with active on-chain record as MATCHING_AUTHENTICATED_RELEASE", async () => {
-    const manifest = await createSignedManifest(testFileBytes);
+    const { manifest, manifestDigest } = await createSignedManifest(testFileBytes);
     const activeRecord: ReleaseRecord = {
       releaseDigest: "0x1111111111111111111111111111111111111111111111111111111111111111",
       publisherAddress: "0xCAFE000000000000000000000000000000000001",
@@ -48,7 +55,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
       productId: "swarmtrace-client",
       releaseVersion: "1.0.0",
       fileHash: ("0x" + manifest.sha256) as `0x${string}`,
-      manifestDigest: "0x2222222222222222222222222222222222222222222222222222222222222222",
+      manifestDigest: ("0x" + manifestDigest) as `0x${string}`,
       previousReleaseDigest: "0x0000000000000000000000000000000000000000000000000000000000000000",
       status: "ACTIVE",
       registeredAt: Date.now(),
@@ -72,7 +79,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
   });
 
   it("detects single byte modification as HASH_MISMATCH with chunk breakdown", async () => {
-    const manifest = await createSignedManifest(testFileBytes);
+    const { manifest } = await createSignedManifest(testFileBytes);
 
     // Modify 1 byte in the file
     const tamperedBytes = new Uint8Array(testFileBytes);
@@ -93,7 +100,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
   });
 
   it("detects forged or altered manifest as INVALID_MANIFEST_SIGNATURE", async () => {
-    const manifest = await createSignedManifest(testFileBytes);
+    const { manifest } = await createSignedManifest(testFileBytes);
     // Attacker modifies manifest version
     manifest.releaseVersion = "9.9.9-INJECTED";
 
@@ -109,7 +116,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
   });
 
   it("identifies revoked release as REVOKED_RELEASE regardless of matching bytes", async () => {
-    const manifest = await createSignedManifest(testFileBytes);
+    const { manifest, manifestDigest } = await createSignedManifest(testFileBytes);
     const revokedRecord: ReleaseRecord = {
       releaseDigest: "0x1111111111111111111111111111111111111111111111111111111111111111",
       publisherAddress: "0xCAFE000000000000000000000000000000000001",
@@ -117,7 +124,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
       productId: "swarmtrace-client",
       releaseVersion: "1.0.0",
       fileHash: ("0x" + manifest.sha256) as `0x${string}`,
-      manifestDigest: "0x2222222222222222222222222222222222222222222222222222222222222222",
+      manifestDigest: ("0x" + manifestDigest) as `0x${string}`,
       previousReleaseDigest: "0x0000000000000000000000000000000000000000000000000000000000000000",
       status: "REVOKED",
       registeredAt: Date.now() - 10000,
@@ -138,4 +145,80 @@ describe("Live Swarm Integrity Verification Engine", () => {
     expect(verdict.fileIntegrity.status).toBe("MATCH");
     expect(verdict.signatureVerification.isValid).toBe(true);
   });
+
+  it("rejects on-chain record if fileHash does not match manifest (binding attack defense)", async () => {
+    const { manifest, manifestDigest } = await createSignedManifest(testFileBytes);
+    // Attacker crafts record claiming status ACTIVE, but for a different fileHash
+    const spoofedRecord: ReleaseRecord = {
+      releaseDigest: "0x1111111111111111111111111111111111111111111111111111111111111111",
+      publisherAddress: "0xCAFE000000000000000000000000000000000001",
+      publisherId: "org.swarmtrace.core",
+      productId: "swarmtrace-client",
+      releaseVersion: "1.0.0",
+      fileHash: "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", // Mismatched!
+      manifestDigest: ("0x" + manifestDigest) as `0x${string}`,
+      previousReleaseDigest: "0x0000000000000000000000000000000000000000000000000000000000000000",
+      status: "ACTIVE",
+      registeredAt: Date.now(),
+      blockNumber: 123456n,
+    };
+
+    const verdict = await verifyFileAgainstManifest({
+      fileBytes: testFileBytes,
+      fileName: "swarmtrace-client-v1.0.0.tar.gz",
+      manifest,
+      publisherPublicKeyHex: keyPair.publicKeyHex,
+      onChainRecord: spoofedRecord,
+    });
+
+    // Must not trust the mismatched on-chain status
+    expect(verdict.status).toBe("UNKNOWN_RELEASE");
+    expect(verdict.explanations.some((e) => e.includes("cryptographic tuple mismatch"))).toBe(true);
+  });
+
+  it("rejects on-chain record if publisherId does not match manifest (cross-publisher defense)", async () => {
+    const { manifest, manifestDigest } = await createSignedManifest(testFileBytes);
+    const spoofedRecord: ReleaseRecord = {
+      releaseDigest: "0x1111111111111111111111111111111111111111111111111111111111111111",
+      publisherAddress: "0xCAFE000000000000000000000000000000000001",
+      publisherId: "attacker.rogue.org", // Mismatched publisher!
+      productId: "swarmtrace-client",
+      releaseVersion: "1.0.0",
+      fileHash: ("0x" + manifest.sha256) as `0x${string}`,
+      manifestDigest: ("0x" + manifestDigest) as `0x${string}`,
+      previousReleaseDigest: "0x0000000000000000000000000000000000000000000000000000000000000000",
+      status: "ACTIVE",
+      registeredAt: Date.now(),
+      blockNumber: 123456n,
+    };
+
+    const verdict = await verifyFileAgainstManifest({
+      fileBytes: testFileBytes,
+      fileName: "swarmtrace-client-v1.0.0.tar.gz",
+      manifest,
+      publisherPublicKeyHex: keyPair.publicKeyHex,
+      onChainRecord: spoofedRecord,
+    });
+
+    expect(verdict.status).toBe("UNKNOWN_RELEASE");
+    expect(verdict.explanations.some((e) => e.includes("cryptographic tuple mismatch"))).toBe(true);
+  });
+
+  it("flags KEY_UNAUTHORIZED when manifest signing key does not match authorized publisher key", async () => {
+    const { manifest } = await createSignedManifest(testFileBytes);
+    const otherKeyPair = generateEd25519KeyPair();
+
+    const verdict = await verifyFileAgainstManifest({
+      fileBytes: testFileBytes,
+      fileName: "swarmtrace-client-v1.0.0.tar.gz",
+      manifest,
+      publisherPublicKeyHex: keyPair.publicKeyHex,
+      authorizedPublisherPubKeyHex: otherKeyPair.publicKeyHex, // Different authorized key on Monad!
+    });
+
+    expect(verdict.status).toBe("INVALID_MANIFEST_SIGNATURE");
+    expect(verdict.signatureVerification.isValid).toBe(false);
+    expect(verdict.signatureVerification.status).toBe("KEY_UNAUTHORIZED");
+  });
 });
+

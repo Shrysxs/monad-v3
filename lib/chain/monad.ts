@@ -1,4 +1,4 @@
-import { defineChain } from "viem";
+import { defineChain, createPublicClient, http } from "viem";
 
 /**
  * Canonical Monad Testnet Chain Definition
@@ -29,4 +29,12 @@ export const monadTestnet = defineChain({
     },
   },
   testnet: true,
+});
+
+/**
+ * Default read client for Monad Testnet queries
+ */
+export const monadPublicClient = createPublicClient({
+  chain: monadTestnet,
+  transport: http(),
 });

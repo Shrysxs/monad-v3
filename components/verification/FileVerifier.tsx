@@ -22,6 +22,7 @@ import {
   type DemoFixtureItem,
 } from "@/lib/demo-data/fixtures";
 import { ChunkMatrix } from "./ChunkMatrix";
+import { fetchOnChainReleaseByFileHash } from "@/lib/chain/contract";
 import type {
   VerificationVerdict,
   SignedReleaseManifest,
@@ -139,13 +140,28 @@ export function FileVerifier() {
 
       setActiveManifest(parsed.manifest);
 
+      // Check on-chain registry if no preset record active
+      let effectiveRecord = onChainRecord;
+      if (!effectiveRecord) {
+        try {
+          const liveRecord = await fetchOnChainReleaseByFileHash(
+            ("0x" + parsed.manifest.sha256) as `0x${string}`
+          );
+          if (liveRecord) {
+            effectiveRecord = liveRecord;
+          }
+        } catch {
+          // Graceful fallback
+        }
+      }
+
       // 2. Run verification engine
       const res = await verifyFileAgainstManifest({
         fileBytes,
         fileName,
         manifest: parsed.manifest,
         publisherPublicKeyHex: publisherPubKey.trim(),
-        onChainRecord,
+        onChainRecord: effectiveRecord,
       });
 
       setVerdict(res);

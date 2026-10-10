@@ -11,6 +11,7 @@ next-env.d.ts
 # Foundry build output
 contracts/out/
 contracts/cache/
+contracts/broadcast/
 
 # Local environment and secret files
 .env*.local

@@ -8,130 +8,194 @@ Built for the **Monad Blitz Hackathon** on **Monad Testnet (Chain ID 10143)**.
 
 ## 1. Project Overview
 
-SwarmTrace helps users assess whether a downloaded file or torrent matches an authentic publisher release, understand how it relates to known variants or older versions, and inspect available security evidence before trusting it.
+Peer-to-peer distribution is fast and resilient, but torrent tracker listings, swarm peer counts, and filenames do not prove that downloaded software was produced by the legitimate vendor. Cryptographic hashes only detect byte modifications when compared against an authentic, tamper-proof reference.
 
-Peer-to-peer distribution is fast and scalable, but filenames, torrent tracker listings, and swarm peer counts do not prove that a file was produced by the legitimate vendor. Cryptographic hashes detect byte-level modifications only when compared against an authentic reference. SwarmTrace bridges this gap by anchoring publisher authorizations and release commitments on Monad.
+**SwarmTrace** bridges this trust gap by anchoring publisher authorizations, release commitments, and revocation statuses on **Monad Testnet**. All file hashing occurs client-side in the browser, ensuring file privacy while cryptographically proving integrity against on-chain publisher records.
 
-### Three Connected Features
-1. **Live Swarm Integrity (`/verify`)**: Client-side whole-file SHA-256 and piece/chunk hashing, verified against canonical RFC 8785 manifest envelopes and publisher Ed25519 signatures.
-2. **Release DNA (`/dna`)**: Cross-variant forensics distinguishing files that share identical filenames, tracing release supersession and revocation relationships.
-3. **Swarm Risk Intelligence (`/risk`)**: Transparent multi-source security panel separating publisher provenance from active malware scanner reports (with honest `SCANNER_UNAVAILABLE` reporting).
+### Four Integrated Capabilities
+
+1. **Live Swarm Integrity (`/verify`)**
+   - Client-side whole-file SHA-256 and piece/chunk hashing using the Web Crypto API.
+   - Detached **Ed25519 signature verification** against RFC 8785 canonical JSON manifests.
+   - Real-time on-chain release querying against `SwarmTraceRegistry` on Monad Testnet.
+   - Visual chunk/piece matrix displaying corruption or tamper boundaries down to specific pieces.
+
+2. **Release DNA (`/dna`)**
+   - Side-by-side forensic comparator distinguishing files that share identical filenames.
+   - Detects repackaged releases, unofficial rebuilds, and version supersession.
+   - Monotonic lineage visualization tracking active, superseded, and revoked release lifecycles.
+
+3. **Swarm Risk Intelligence (`/risk`)**
+   - Multi-source risk evidence aggregator separating publisher provenance from malware scans.
+   - Strictly honest reporting: displays `SCANNER_UNAVAILABLE` or `NOT_SCANNED` rather than pretending scans ran or reporting clean verdicts without evidence.
+   - Multi-factor risk scoring with caveats and detailed forensic explanations.
+
+4. **Publisher Portal & Governance (`/publisher`)**
+   - Web3 wallet connection with automatic chain switching to Monad Testnet (Chain ID `10143`).
+   - Publisher Ed25519 public key registration, release publishing (`registerRelease`), key rotation (`rotateSigningKey`), and emergency revocation (`revokeRelease`).
 
 ---
 
 ## 2. Core Security & Honesty Guarantees
 
-- **Integrity $\neq$ Benign:** A matching hash proves byte-level equivalence to the publisher reference. It does **not** prove the software is malware-free.
-- **Mismatch $\neq$ Malware:** A mismatched hash indicates the downloaded bytes differ from the reference (e.g. repacked installer, alternate build, or corrupted download).
-- **Filename $\neq$ Identity:** Filenames are informational display hints and are never trusted as identity proof.
-- **Honest Scanner Reporting:** When no scanner API is configured, SwarmTrace reports `SCANNER_UNAVAILABLE` or `NOT_SCANNED`. We never fabricate a clean or 0-detection result.
-- **Local File Processing:** File bytes are hashed strictly in the browser using the Web Crypto API. File contents are **never** uploaded to a server.
-- **No Mock P2P Activity:** We do not claim live BitTorrent wire-protocol monitoring without an active, tested client integration.
+SwarmTrace adheres to six fundamental security and honesty principles:
+
+1. **Integrity $\neq$ Benign:** A matching hash proves byte-level equivalence to the publisher's reference release. It does **not** prove the software is malware-free.
+2. **Mismatch $\neq$ Malware:** A mismatched hash indicates the downloaded bytes differ from the reference (e.g. repacked installer, alternate build, or corrupted download). It does not prove malicious intent.
+3. **Filename $\neq$ Identity:** Filenames are purely informational display hints and are never trusted as identity proof.
+4. **Honest Scanner Reporting:** When no external antivirus/scanner API is active, SwarmTrace explicitly reports `SCANNER_UNAVAILABLE` or `NOT_SCANNED`. We never fabricate a clean or 0-detection result.
+5. **Local File Processing:** File bytes are hashed strictly in the user's browser using the Web Crypto API. File contents are **never** uploaded to any server.
+6. **No Mock Wire Protocol:** We do not claim live BitTorrent wire-protocol monitoring without an active, tested client integration.
 
 ---
 
-## 3. Technology Stack
+## 3. Deployment & Network Information
 
-- **Frontend:** Next.js 15 (App Router), TypeScript 5.9 (Strict Mode, `target: ES2020`), Tailwind CSS, Lucide icons.
-- **Smart Contracts:** Solidity 0.8.28, OpenZeppelin Contracts v5, Foundry v1.8.5.
+| Parameter | Configuration / Value |
+|---|---|
+| **Network Name** | Monad Testnet |
+| **Chain ID** | `10143` (`0x279f`) |
+| **RPC Endpoint** | `https://testnet-rpc.monad.xyz` |
+| **Currency Symbol** | `MON` |
+| **Block Explorer** | `https://testnet.monadscan.com` |
+| **Registry Contract** | `0x0000000000000000000000000000000000000000` *(Pending User Broadcast Approval)* |
+| **Contract on Explorer** | [View on MonadScan](https://testnet.monadscan.com) *(Pending Deployment)* |
+| **Production App URL** | `https://swarmtrace.vercel.app` *(Pending Deployment)* |
+
+---
+
+## 4. Environment Variables
+
+Create `.env.local` based on `.env.example`:
+
+```bash
+cp .env.example .env.local
+```
+
+| Variable | Scope | Description | Default / Example |
+|---|---|---|---|
+| `NEXT_PUBLIC_MONAD_CHAIN_ID` | Client | Chain ID for Monad Testnet | `10143` |
+| `NEXT_PUBLIC_MONAD_RPC_URL` | Client | Public RPC endpoint | `https://testnet-rpc.monad.xyz` |
+| `NEXT_PUBLIC_MONAD_EXPLORER_URL` | Client | Block explorer base URL | `https://testnet.monadscan.com` |
+| `NEXT_PUBLIC_SWARMTRACE_REGISTRY_ADDRESS` | Client | Deployed `SwarmTraceRegistry` address | `0x...` |
+| `PRIVATE_KEY` | Server / CLI | Deployer private key (**Never prefix with `NEXT_PUBLIC_`**) | Terminal / Keystore only |
+
+> [!CAUTION]
+> Never commit `PRIVATE_KEY` or put sensitive credentials in client-accessible `NEXT_PUBLIC_*` variables.
+
+---
+
+## 5. Getting Started & Local Setup
+
+### Prerequisites
+- **Node.js**: `v20.x` or higher
+- **npm**: `v10.x` or higher
+- **Foundry**: `forge` and `cast` (`forge 1.8.5` or higher)
+
+### Installation
+
+1. **Clone the repository and install root dependencies:**
+   ```bash
+   git clone https://github.com/Shrysxs/monad-v3.git
+   cd monad-v3
+   npm install
+   ```
+
+2. **Install Foundry contract dependencies:**
+   ```bash
+   cd contracts
+   forge install
+   cd ..
+   ```
+
+3. **Configure environment variables:**
+   ```bash
+   cp .env.example .env.local
+   ```
+
+4. **Start the local Next.js development server:**
+   ```bash
+   npm run dev
+   ```
+   Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## 6. Verification & Test Suite
+
+All quality gates, adversarial security tests, and build artifacts pass cleanly:
+
+```bash
+# 1. Run smart contract test suite (18 adversarial Foundry tests)
+npm run contracts:test
+
+# 2. Run cryptographic & risk intelligence tests (38 Vitest tests)
+npm test
+
+# 3. Strict TypeScript typechecking (target ES2020)
+npm run typecheck
+
+# 4. Production Next.js build (8 static prerendered routes)
+npm run build
+```
+
+### Test Coverage Summary
+- **Smart Contracts (Foundry):** 18 passing tests covering publisher authorization, cross-publisher access denial, duplicate release rejection, monotonic status progressions (`Active` $\to$ `Superseded` $\to$ `Revoked`), key rotation, and batch queries.
+- **Cryptographic Engine (Vitest):** 38 passing tests covering RFC 8785 canonical JSON serialization, SHA-256 chunking, detached Ed25519 signatures, binding attack defenses, cross-publisher spoofing defenses, and honest evidence aggregation.
+- **Frontend (Next.js):** 0 TypeScript errors, 8 cleanly pre-rendered static routes (`/`, `/verify`, `/dna`, `/risk`, `/publisher`, `/_not-found`).
+
+---
+
+## 7. Smart Contract Deployment Guide
+
+The deployment script is located at `contracts/script/DeploySwarmTrace.s.sol`.
+
+### Dry-Run Simulation (No Gas Spent)
+Simulate deployment against live Monad Testnet RPC without broadcasting:
+
+```bash
+cd contracts
+PRIVATE_KEY=0x... forge script script/DeploySwarmTrace.s.sol:DeploySwarmTrace \
+  --rpc-url https://testnet-rpc.monad.xyz
+cd ..
+```
+
+- **Gas Estimate:** ~3,101,013 gas units
+- **Cost Estimate:** ~0.63 MON at ~100 gwei base fee + 3 gwei priority fee
+
+### Live Testnet Broadcast (Requires Approval & Funding)
+Once deployer wallet is funded with $\ge 0.65$ testnet MON:
+
+```bash
+cd contracts
+PRIVATE_KEY=0x... forge script script/DeploySwarmTrace.s.sol:DeploySwarmTrace \
+  --rpc-url https://testnet-rpc.monad.xyz \
+  --broadcast
+cd ..
+```
+
+After broadcast:
+1. Copy the deployed contract address from the Foundry console output.
+2. Update `NEXT_PUBLIC_SWARMTRACE_REGISTRY_ADDRESS` in `.env.local` and your hosting provider (e.g. Vercel).
+3. Verify on MonadScan at `https://testnet.monadscan.com/address/<DEPLOYED_ADDRESS>`.
+
+---
+
+## 8. Known Limitations & Roadmap
+
+- **BitTorrent Wire Protocol:** SwarmTrace currently processes downloaded payloads and `.torrent` chunk manifests in the browser. Direct TCP/uTP peer wire inspection requires a local native desktop daemon or WebRTC-based torrent client integration.
+- **External Antivirus Integration:** Commercial scanners (e.g. VirusTotal API) require paid API keys and file uploads, which violate zero-knowledge file privacy. SwarmTrace defaults to transparent `SCANNER_UNAVAILABLE` unless an explicit privacy-preserving hash-lookup API is connected.
+- **Browser Memory Limits:** In-browser Web Crypto API processing buffers file chunks in memory. Files larger than 2 GB should be verified piece-by-piece or via CLI tools.
+
+---
+
+## 9. Technology Stack
+
+- **Frontend:** Next.js 15 (App Router), TypeScript 5.9, Tailwind CSS, Lucide icons.
+- **Smart Contracts:** Solidity 0.8.28, OpenZeppelin Contracts v5, Foundry.
 - **Blockchain:** Monad Testnet (Chain ID `10143`, EVM `cancun`).
 - **Web3 Integration:** `viem` v2.23 and `wagmi` v2.14.
 - **Cryptography:**
   - Hashing: Web Crypto API (`crypto.subtle.digest("SHA-256")`).
   - Manifest Serialization: RFC 8785 JSON Canonicalization Scheme (JCS).
   - Digital Signatures: Ed25519 via `@noble/curves/ed25519`.
-- **Testing:** Foundry (`forge test`) and Vitest (`vitest run`).
-
----
-
-## 4. Frozen Architecture & Agent Ownership
-
-Development is strictly partitioned across three specialized implementation agents coordinated by the Technical Lead:
-
-| Agent | Scope | Owned Directories | Quality Gate |
-|---|---|---|---|
-| **Agent A** | Smart Contracts | `contracts/src/`, `contracts/test/`, `contracts/script/` | `npm run contracts:test` |
-| **Agent B** | Cryptographic & Risk Engine | `lib/crypto/`, `lib/manifests/`, `lib/risk/`, `tests/` | `npm test` (`vitest run`) |
-| **Agent C** | Frontend & User Experience | `app/`, `components/`, `public/` | `npm run typecheck && npm run build` |
-| **Lead** | Shared Types & ABI Sync | `lib/verification/types.ts`, `lib/chain/`, `docs/` | Single source of truth |
-
-### Shared Data Contracts
-All agents import interfaces directly from `@/lib/verification/types`:
-- `PublisherIdentity`: Publisher reverse-DNS ID, address, and Ed25519 public key.
-- `ReleaseManifestPayload` & `SignedReleaseManifest`: Canonical release manifest.
-- `FileIntegrityResult`: Whole-file and piece-by-piece hash match results.
-- `SignatureVerificationResult`: Ed25519 verification against authorized publisher keys.
-- `EvidenceFinding`: Multi-source findings (`PUBLISHER`, `STATIC_SCANNER`, `COMMUNITY_VERIFIER`).
-- `VerificationVerdict`: Explanations, caveats, and overall verdict status.
-
----
-
-## 5. Solidity Contract Specification
-
-The canonical registry contract is `SwarmTraceRegistry.sol` (`ISwarmTraceRegistry.sol`):
-- **`authorizePublisher(address publisher, string publisherId, bytes32 ed25519PubKey)`**: Admin-only publisher onboarding.
-- **`registerRelease(string productId, string releaseVersion, bytes32 fileHash, bytes32 manifestDigest, bytes32 previousReleaseDigest)`**: Publisher-authenticated release commitment. Automatically marks `previousReleaseDigest` as `Superseded`.
-- **`revokeRelease(bytes32 releaseDigest, string reason)`**: Revokes an active release (callable only by the registering publisher or emergency admin).
-- **`rotateSigningKey(bytes32 newEd25519PubKey)`**: Publisher updates their authorized Ed25519 signing key.
-- **Read Methods**: `getRelease`, `getReleaseByFileHash`, `getPublisher`, `isAuthorizedPublisher`, `getReleaseStatus`.
-
----
-
-## 6. Monad Testnet Configuration
-
-- **Network Name:** Monad Testnet
-- **Chain ID:** `10143`
-- **RPC Endpoint:** `https://testnet-rpc.monad.xyz`
-- **Block Explorer:** `https://testnet.monadscan.com`
-- **Currency Symbol:** `MON`
-
-### Testing Transactions Safely (Without Leaking Private Keys)
-1. Copy `.env.example` to `.env.local`:
-   ```bash
-   cp .env.example .env.local
-   ```
-2. When deploying or broadcasting via Foundry, supply `PRIVATE_KEY` directly via environment variable in your terminal session or use an interactive cast wallet keystore:
-   ```bash
-   # Option A: Interactive prompt (safest)
-   cast send --rpc-url https://testnet-rpc.monad.xyz --interactive <CONTRACT> "registerRelease(...)"
-
-   # Option B: Terminal session variable (never committed to git)
-   PRIVATE_KEY=0x... forge script script/DeploySwarmTrace.s.sol --rpc-url monad_testnet --broadcast
-   ```
-3. Never prefix deployer private keys with `NEXT_PUBLIC_`.
-
----
-
-## 7. Development & Verification Commands
-
-All toolchains and integration gates are configured and tested:
-
-```bash
-# 1. Run unit & cryptographic verification tests (Vitest)
-npm test
-
-# 2. Run smart contract unit & access control tests (Foundry)
-npm run contracts:test
-
-# 3. Typecheck codebase with strict TypeScript
-npm run typecheck
-
-# 4. Compile Next.js production build
-npm run build
-```
-
----
-
-## 8. Current Phase Status
-
-- **Phase 0 (Setup & Dependencies):** Complete.
-- **Phase 1 (Architecture Freeze & Integration Contracts):** Complete.
-  - Frozen shared types: `lib/verification/types.ts`
-  - Frozen crypto protocol: `docs/cryptographic-protocol.md`
-  - Frozen contract interface: `contracts/src/interfaces/ISwarmTraceRegistry.sol`
-  - Frozen agent integration contract: `docs/agent-integration-contract.md`
-- **Phase 2 (Implementation of All Three Core Features):** Complete.
-  - **Agent A (Smart Contracts):** `SwarmTraceRegistry.sol` implemented with access control, replay protection, monotonic status progression (`Active` -> `Superseded`/`Revoked`), and batch queries. 18 Foundry adversarial tests passing (`18 passed; 0 failed`).
-  - **Agent B (Cryptographic & Risk Intelligence):** Full RFC 8785 canonical JSON serializer, Web Crypto SHA-256 whole-file & piece hashing, `@noble/curves/ed25519` detached signature verifier, `compareArtifacts` Release DNA forensic comparator, and `aggregateRiskIntelligence` honest evidence aggregator. 35 Vitest tests passing (`35 passed; 0 failed`).
-  - **Agent C (Frontend & Web3 Integration):** Interactive UI for `/verify` (file & piece verifier with chunk matrix), `/dna` (side-by-side artifact comparator & lineage graph), `/risk` (multi-source evidence dashboard with honest `SCANNER_UNAVAILABLE` reporting), and `/publisher` (publisher registration & revocation on Monad Testnet). 5 cryptographically signed demo fixtures created and badged. Next.js build passes cleanly (`8/8` static pages).
-- **Phase 3 (Testnet Deployment):** Ready for deployment upon user authorization and credential configuration.
