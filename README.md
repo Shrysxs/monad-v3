@@ -1,204 +1,198 @@
 # Penguin Trace
 
-> **Verify software integrity. Trace release provenance.**
+> Verify software integrity. Trace provenance.
 
-A security-focused Web3 verification and forensics layer that checks downloaded files against authenticated releases, compares suspicious variants, and explains security evidence, backed by an auditable release registry on Monad.
+Penguin Trace is a local verification tool and release registry client. It addresses a straightforward problem: when you download a software binary or installer, there is rarely a direct way to prove that the file matches what the publisher built, that the publisher's signing key was authorized, or that the release has not been revoked.
 
-Built for the **Monad Blitz Hackathon** on **Monad Testnet (Chain ID 10143)**.
+The application computes file digests locally in the browser, checks detached Ed25519 signatures across canonical RFC 8785 manifests, and inspects release commitments recorded on Monad Testnet.
 
----
+## What it does
 
-## 1. Project Overview
+- **Local file hashing:** Computes full-file SHA-256 digests and piece-level chunk hashes entirely in the browser using the Web Crypto API. File contents are never uploaded to a server.
+- **Detached signature verification:** Validates publisher Ed25519 signatures against RFC 8785 JSON Canonicalization Scheme (JCS) release manifests.
+- **Piece-level tamper localization:** Matches individual piece hashes against manifest declarations to pinpoint altered or corrupted byte ranges.
+- **On-chain release commitments:** Queries an EVM registry contract on Monad Testnet for publisher authorization, version lineage, and revocation status.
+- **Variant forensics (Release DNA):** Compares two artifacts that share the same filename to determine whether they share an origin, represent distinct builds, or indicate an untrusted repack.
+- **Honest evidence reporting:** Separates publisher identity from runtime safety. When no antivirus or external scanner is configured, the tool reports `SCANNER_UNAVAILABLE` rather than fabricating a clean result.
 
-Peer-to-peer distribution is fast and resilient, but torrent tracker listings, swarm peer counts, and filenames do not prove that downloaded software was produced by the legitimate vendor. Cryptographic hashes only detect byte modifications when compared against an authentic, tamper-proof reference.
+## How verification works
 
-**Penguin Trace** bridges this trust gap by anchoring publisher authorizations, release commitments, and revocation statuses on **Monad Testnet**. All file hashing occurs client-side in the browser, ensuring file privacy while cryptographically proving integrity against on-chain publisher records in the deployed `SwarmTraceRegistry` contract.
+Verification follows a five-step sequence:
 
-### Four Integrated Capabilities
+1. **File selection and local hashing:** The user drops or selects a file. The browser reads the bytes through the Web Crypto API and computes its whole-file SHA-256 digest, along with sequential piece hashes if a chunk size is defined.
+2. **Digest comparison:** The computed hash is compared against the expected digest declared in the release manifest. If they differ, the verification halts with a `HASH_MISMATCH` status and highlights the altered pieces.
+3. **Manifest validation and signature check:** The manifest JSON is parsed and canonicalized according to RFC 8785. The detached Ed25519 signature is verified against the publisher's declared public key. If the signature does not match the canonical bytes, the result returns `INVALID_MANIFEST_SIGNATURE`.
+4. **On-chain registry inspection:** The registry contract on Monad Testnet is queried by publisher ID and file hash. The check verifies whether the signing key is authorized, whether the release commitment exists, whether an older version was superseded, or whether the release was marked `REVOKED`.
+5. **Verdict classification:** The engine returns one of seven discrete states:
+   - `MATCHING_AUTHENTICATED_RELEASE`
+   - `HASH_MISMATCH`
+   - `INVALID_MANIFEST_SIGNATURE`
+   - `UNAUTHORIZED_KEY`
+   - `REVOKED_RELEASE`
+   - `UNKNOWN_RELEASE`
+   - `NETWORK_ERROR`
 
-1. **Live Integrity (`/verify`)**
-   - Client-side whole-file SHA-256 and piece/chunk hashing using the Web Crypto API.
-   - Detached **Ed25519 signature verification** against RFC 8785 canonical JSON manifests.
-   - Real-time on-chain release querying against `SwarmTraceRegistry` on Monad Testnet.
-   - Visual chunk/piece matrix displaying corruption or tamper boundaries down to specific pieces.
+### Core security boundaries
 
-2. **Release DNA (`/dna`)**
-   - Side-by-side forensic comparator distinguishing files that share identical filenames.
-   - Detects repackaged releases, unofficial rebuilds, and version supersession.
-   - Monotonic lineage visualization tracking active, superseded, and revoked release lifecycles.
+- **Integrity is not safety:** A matching SHA-256 hash proves byte-level equivalence to the publisher's reference artifact. It does not prove that the code is free of bugs, backdoors, or malicious logic.
+- **A mismatch is not proof of malware:** An altered hash indicates the file differs from the reference (due to bit rot, an unofficial repack, or a modified installer). It does not identify the intent behind the change.
+- **Signatures verify authorship, not behavior:** A valid Ed25519 signature proves the manifest was created by the holder of the private key. It does not inspect what the binary does when executed.
+- **Blockchain records do not scan binaries:** The registry records cryptographic commitments. Monad does not execute, analyze, or sanitize software payloads.
 
-3. **Risk Intelligence (`/risk`)**
-   - Multi-source risk evidence aggregator separating publisher provenance from malware scans.
-   - Strictly honest reporting: displays `SCANNER_UNAVAILABLE` or `NOT_SCANNED` rather than pretending scans ran or reporting clean verdicts without evidence.
-   - Multi-factor risk scoring with caveats and detailed forensic explanations.
+## Why Monad?
 
-4. **Publisher Portal & Governance (`/publisher`)**
-   - Web3 wallet connection with automatic chain switching to Monad Testnet (Chain ID `10143`).
-   - Publisher Ed25519 public key registration, release publishing (`registerRelease`), key rotation (`rotateSigningKey`), and emergency revocation (`revokeRelease`).
+File hashing and Ed25519 signature checks can be performed entirely offline. However, static checksums published on standard HTTP mirrors or vendor websites share the same single point of failure as the download itself: if the mirror or DNS is compromised, the posted hashes and public keys can be swapped simultaneously.
 
----
+Penguin Trace uses Monad Testnet to run an immutable, append-only registry contract (`SwarmTraceRegistry`). The contract stores:
 
-## 2. Core Security & Honesty Guarantees
+- Authorized publisher IDs and their corresponding Ed25519 public keys
+- Deterministic release digests (`keccak256(publisherId, productId, releaseVersion, fileHash, manifestDigest)`)
+- Version lineage pointers (`previousReleaseDigest`) to track supersession
+- Permanent revocation flags and explanations
 
-Penguin Trace adheres to six fundamental security and honesty principles:
+This creates an independently verifiable public ledger of release history that a compromised download mirror cannot retroactively modify. Monad was selected for its EVM compatibility, sub-second block finality, and low transaction costs for recording high-frequency releases.
 
-1. **Integrity $\neq$ Benign:** A matching hash proves byte-level equivalence to the publisher's reference release. It does **not** prove the software is malware-free.
-2. **Mismatch $\neq$ Malware:** A mismatched hash indicates the downloaded bytes differ from the reference (e.g. repacked installer, alternate build, or corrupted download). It does not prove malicious intent.
-3. **Filename $\neq$ Identity:** Filenames are purely informational display hints and are never trusted as identity proof.
-4. **Honest Scanner Reporting:** When no external antivirus/scanner API is active, Penguin Trace explicitly reports `SCANNER_UNAVAILABLE` or `NOT_SCANNED`. We never fabricate a clean or 0-detection result.
-5. **Local File Processing:** File bytes are hashed strictly in the user's browser using the Web Crypto API. File contents are **never** uploaded to any server.
-6. **No Mock Wire Protocol:** We do not claim live BitTorrent wire-protocol monitoring without an active, tested client integration.
+- **Contract Address:** [`0xeB3Ef45368cf0A28679FC6F037295fC2607deF01`](https://testnet.monadscan.com/address/0xeB3Ef45368cf0A28679FC6F037295fC2607deF01)
+- **Deployment Transaction:** [`0x037d4996320061039d5632c7cede5bb021fcdb29446ddbcf3e10fea63ff820f9`](https://testnet.monadscan.com/tx/0x037d4996320061039d5632c7cede5bb021fcdb29446ddbcf3e10fea63ff820f9)
+- **Network:** Monad Testnet (Chain ID `10143`)
 
----
+*Note: The contract bytecode is deployed and verified on testnet. Live publisher authorizations and production release commitments have not yet been broadcast to this contract instance; the application uses local fixtures for demonstration.*
 
-## 3. Deployment & Network Information
+## Tech stack
 
-| Parameter | Configuration / Value |
-|---|---|
-| **Network Name** | Monad Testnet |
-| **Chain ID** | `10143` (`0x279f`) |
-| **RPC Endpoint** | `https://testnet-rpc.monad.xyz` |
-| **Currency Symbol** | `MON` |
-| **Block Explorer** | `https://testnet.monadscan.com` |
-| **Registry Contract** | `0xeB3Ef45368cf0A28679FC6F037295fC2607deF01` |
-| **Contract on Explorer** | [View on MonadScan](https://testnet.monadscan.com/address/0xeB3Ef45368cf0A28679FC6F037295fC2607deF01) |
-| **Deployment Tx Hash** | `0x037d4996320061039d5632c7cede5bb021fcdb29446ddbcf3e10fea63ff820f9` |
-| **Deployer / Owner** | `0xB9BA425A04E8BbDD74eeDa5c668e8F5f32A1eA97` |
+- **Frontend:** Next.js 15 (App Router), React 19, TypeScript 5.7, Tailwind CSS, Lucide icons
+- **Smart Contracts:** Solidity 0.8.28, OpenZeppelin Contracts v5, Foundry (`forge`, `cast`)
+- **Web3 Integration:** `viem` 2.23, `wagmi` 2.14
+- **Cryptography:**
+  - Web Crypto API (`crypto.subtle.digest("SHA-256")`) for in-browser file hashing
+  - `@noble/curves` (`ed25519`) for Ed25519 signature verification
+  - RFC 8785 JSON Canonicalization Scheme (JCS) for deterministic manifest payloads
+- **Testing:** Vitest 3.0 (frontend & cryptographic engine), Foundry (Solidity contracts)
 
----
-
-## 4. Environment Variables
-
-Create `.env.local` based on `.env.example`:
-
-```bash
-cp .env.example .env.local
-```
-
-| Variable | Scope | Description | Default / Example |
-|---|---|---|---|
-| `NEXT_PUBLIC_MONAD_CHAIN_ID` | Client | Chain ID for Monad Testnet | `10143` |
-| `NEXT_PUBLIC_MONAD_RPC_URL` | Client | Public RPC endpoint | `https://testnet-rpc.monad.xyz` |
-| `NEXT_PUBLIC_MONAD_EXPLORER_URL` | Client | Block explorer base URL | `https://testnet.monadscan.com` |
-| `NEXT_PUBLIC_SWARMTRACE_REGISTRY_ADDRESS` | Client | Deployed `SwarmTraceRegistry` address | `0x...` |
-| `PRIVATE_KEY` | Server / CLI | Deployer private key (**Never prefix with `NEXT_PUBLIC_`**) | Terminal / Keystore only |
-
-> [!CAUTION]
-> Never commit `PRIVATE_KEY` or put sensitive credentials in client-accessible `NEXT_PUBLIC_*` variables.
-
----
-
-## 5. Getting Started & Local Setup
+## Getting started
 
 ### Prerequisites
-- **Node.js**: `v20.x` or higher
-- **npm**: `v10.x` or higher
-- **Foundry**: `forge` and `cast` (`forge 1.8.5` or higher)
+
+- Node.js 20.x or higher
+- npm 10.x or higher
+- Foundry (`forge` and `cast`), if you plan to compile or test the Solidity contracts
 
 ### Installation
 
-1. **Clone the repository and install root dependencies:**
+1. Clone the repository:
    ```bash
    git clone https://github.com/Shrysxs/monad-v3.git
    cd monad-v3
+   ```
+
+2. Install Node dependencies:
+   ```bash
    npm install
    ```
 
-2. **Install Foundry contract dependencies:**
+3. (Optional) Install Foundry dependencies:
    ```bash
    cd contracts
    forge install
    cd ..
    ```
 
-3. **Configure environment variables:**
-   ```bash
-   cp .env.example .env.local
-   ```
+### Configuration
 
-4. **Start the local Next.js development server:**
-   ```bash
-   npm run dev
-   ```
-   Open [http://localhost:3000](http://localhost:3000) in your browser.
-
----
-
-## 6. Verification & Test Suite
-
-All quality gates, adversarial security tests, and build artifacts pass cleanly:
+Copy the example environment file:
 
 ```bash
-# 1. Run smart contract test suite (18 adversarial Foundry tests)
-npm run contracts:test
+cp .env.example .env.local
+```
 
-# 2. Run cryptographic & risk intelligence tests (38 Vitest tests)
-npm test
+The default `.env.local` is preconfigured for Monad Testnet and the deployed registry contract:
 
-# 3. Strict TypeScript typechecking (target ES2020)
-npm run typecheck
+```ini
+NEXT_PUBLIC_MONAD_CHAIN_ID=10143
+NEXT_PUBLIC_MONAD_RPC_URL=https://testnet-rpc.monad.xyz
+NEXT_PUBLIC_MONAD_EXPLORER_URL=https://testnet.monadscan.com
+NEXT_PUBLIC_SWARMTRACE_REGISTRY_ADDRESS=0xeB3Ef45368cf0A28679FC6F037295fC2607deF01
+```
 
-# 4. Production Next.js build (8 static prerendered routes)
+*Never store private keys or signing secrets in `.env.local` or any file tracked by version control.*
+
+### Running locally
+
+Start the development server:
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+To create a production build and test it locally:
+
+```bash
 npm run build
+npm run start
 ```
 
-### Test Coverage Summary
-- **Smart Contracts (Foundry):** 18 passing tests covering publisher authorization, cross-publisher access denial, duplicate release rejection, monotonic status progressions (`Active` $\to$ `Superseded` $\to$ `Revoked`), key rotation, and batch queries.
-- **Cryptographic Engine (Vitest):** 38 passing tests covering RFC 8785 canonical JSON serialization, SHA-256 chunking, detached Ed25519 signatures, binding attack defenses, cross-publisher spoofing defenses, and honest evidence aggregation.
-- **Frontend (Next.js):** 0 TypeScript errors, 8 cleanly pre-rendered static routes (`/`, `/verify`, `/dna`, `/risk`, `/publisher`, `/_not-found`).
+## Running tests
 
----
+The repository includes test suites for both frontend cryptographic logic and smart contracts.
 
-## 7. Smart Contract Deployment Guide
-
-The deployment script is located at `contracts/script/DeploySwarmTrace.s.sol`.
-
-### Dry-Run Simulation (No Gas Spent)
-Simulate deployment against live Monad Testnet RPC without broadcasting:
+### Frontend and cryptographic tests (Vitest)
 
 ```bash
-cd contracts
-PRIVATE_KEY=0x... forge script script/DeploySwarmTrace.s.sol:DeploySwarmTrace \
-  --rpc-url https://testnet-rpc.monad.xyz
-cd ..
+npm test
 ```
 
-- **Gas Estimate:** ~3,101,013 gas units
-- **Cost Estimate:** ~0.63 MON at ~100 gwei base fee + 3 gwei priority fee
+Runs 42 tests across 6 test suites:
+- `tests/crypto/manifest-crypto.test.ts`: RFC 8785 canonicalization, key ordering, SHA-256 digests, and detached Ed25519 signature verification.
+- `tests/verification/engine.test.ts`: Local file hashing, piece matching, status outcome resolution, and corrupt chunk isolation.
+- `tests/risk/release-dna.test.ts`: Variant comparison rules, chunk diff calculations, and lineage graph generation.
+- `tests/risk/evidence.test.ts`: Multi-source evidence scoring and honest scanner-unavailable state handling.
+- `tests/integration/e2e-verification.test.ts`: Full verification path linking file bytes, manifests, signatures, and registry records.
+- `tests/demo-data/fixtures.test.ts`: Integrity and cryptographic consistency of sample fixtures.
 
-### Live Testnet Broadcast (Requires Approval & Funding)
-Once deployer wallet is funded with $\ge 0.65$ testnet MON:
+### Smart contract tests (Foundry)
 
 ```bash
-cd contracts
-PRIVATE_KEY=0x... forge script script/DeploySwarmTrace.s.sol:DeploySwarmTrace \
-  --rpc-url https://testnet-rpc.monad.xyz \
-  --broadcast
-cd ..
+npm run contracts:test
 ```
 
-After broadcast:
-1. Copy the deployed contract address from the Foundry console output.
-2. Update `NEXT_PUBLIC_SWARMTRACE_REGISTRY_ADDRESS` in `.env.local` and your hosting provider (e.g. Vercel).
-3. Verify on MonadScan at `https://testnet.monadscan.com/address/<DEPLOYED_ADDRESS>`.
+Runs 18 Solidity tests in `contracts/test/SwarmTraceRegistry.t.sol`:
+- Publisher authorization and deauthorization by contract owner
+- Release commitment registration and collision resistance
+- Automatic version supersession
+- Revocation permanence and prevention of re-revoking
+- Access control enforcement (unauthorized callers cannot register releases or revoke other publishers' records)
+- Fuzz testing of the deterministic release digest formula
 
----
+### Code quality checks
 
-## 8. Known Limitations & Roadmap
+```bash
+npm run typecheck   # TypeScript compiler check (tsc --noEmit)
+npm run lint        # ESLint verification
+```
 
-- **BitTorrent Wire Protocol:** Penguin Trace currently processes downloaded payloads and `.torrent` chunk manifests in the browser. Direct TCP/uTP peer wire inspection requires a local native desktop daemon or WebRTC-based torrent client integration.
-- **External Antivirus Integration:** Commercial scanners (e.g. VirusTotal API) require paid API keys and file uploads, which violate zero-knowledge file privacy. Penguin Trace defaults to transparent `SCANNER_UNAVAILABLE` unless an explicit privacy-preserving hash-lookup API is connected.
-- **Browser Memory Limits:** In-browser Web Crypto API processing buffers file chunks in memory. Files larger than 2 GB should be verified piece-by-piece or via CLI tools.
+## Demo walkthrough
 
----
+An interactive demonstration is available at `/demo` or by clicking **Try Demo** in the navigation header.
 
-## 9. Technology Stack
+The demo does not require a Web3 wallet, testnet gas, or external API keys. It runs entirely in memory using pre-computed cryptographic fixtures:
 
-- **Frontend:** Next.js 15 (App Router), TypeScript 5.9, Tailwind CSS, Lucide icons.
-- **Smart Contracts:** Solidity 0.8.28, OpenZeppelin Contracts v5, Foundry.
-- **Blockchain:** Monad Testnet (Chain ID `10143`, EVM `cancun`).
-- **Web3 Integration:** `viem` v2.23 and `wagmi` v2.14.
-- **Cryptography:**
-  - Hashing: Web Crypto API (`crypto.subtle.digest("SHA-256")`).
-  - Manifest Serialization: RFC 8785 JSON Canonicalization Scheme (JCS).
-  - Digital Signatures: Ed25519 via `@noble/curves/ed25519`.
+1. **Step 1 (Verify integrity):** Evaluates an authentic Ubuntu image (`ubuntu-24.04-desktop-amd64.iso`) against its signed manifest, verifying full-file SHA-256 and all 7 piece hashes.
+2. **Step 2 (Detect tampering):** Evaluates a modified variant of the same file with 1 flipped byte, showing the hash mismatch and isolating the altered piece (#0).
+3. **Step 3 (Explore release history):** Compares two artifacts sharing identical filenames to demonstrate how cryptographic digests distinguish official vendor builds from unverified tracker repacks.
+4. **Step 4 (Inspect risk report):** Displays the multi-source evidence audit, showing 100% provenance confidence alongside an explicit `SCANNER_UNAVAILABLE` notice for malware inspection.
+
+*Note: All data in `/demo` consists of local test fixtures. They demonstrate the verification workflow but do not represent live on-chain transactions.*
+
+## Limitations
+
+- **No live BitTorrent client:** The application does not connect to the BitTorrent wire protocol (TCP/uTP peer connections) or scrape active swarms. Piece integrity is verified against chunk hashes declared in the manifest.
+- **No integrated malware scanner:** The tool does not submit files to VirusTotal or execute dynamic sandbox analysis. External scanner status is honestly reported as unavailable.
+- **Browser memory constraints:** Files are processed in memory through the browser's Web Crypto API. Files larger than approximately 2 GB may encounter browser memory limits.
+- **On-chain registry state:** While the `SwarmTraceRegistry` contract is deployed on Monad Testnet, live publisher accounts and production software releases have not yet been registered on-chain. The publisher portal allows submitting transactions, but pre-seeded scenarios rely on local fixtures.
+- **Deployment:** The application is configured and verified for local execution; it is not currently deployed to a public hosting URL.
+
+## Project status
+
+Penguin Trace is a working prototype and developer tool. The cryptographic verification engine, RFC 8785 manifest pipeline, Ed25519 signature checks, and smart contract architecture are fully implemented and tested.
