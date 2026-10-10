@@ -1,0 +1,22 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# Next.js build output
+.next/
+out/
+tsconfig.tsbuildinfo
+next-env.d.ts
+
+# Foundry build output
+contracts/out/
+contracts/cache/
+
+# Local environment and secret files
+.env*.local
+.env
+!.env.example
+
+# OS / Editor artifacts
+.DS_Store
+*.log
