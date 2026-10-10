@@ -58,9 +58,10 @@ SwarmTrace adheres to six fundamental security and honesty principles:
 | **RPC Endpoint** | `https://testnet-rpc.monad.xyz` |
 | **Currency Symbol** | `MON` |
 | **Block Explorer** | `https://testnet.monadscan.com` |
-| **Registry Contract** | `0x0000000000000000000000000000000000000000` *(Pending User Broadcast Approval)* |
-| **Contract on Explorer** | [View on MonadScan](https://testnet.monadscan.com) *(Pending Deployment)* |
-| **Production App URL** | `https://swarmtrace.vercel.app` *(Pending Deployment)* |
+| **Registry Contract** | `0xeB3Ef45368cf0A28679FC6F037295fC2607deF01` |
+| **Contract on Explorer** | [View on MonadScan](https://testnet.monadscan.com/address/0xeB3Ef45368cf0A28679FC6F037295fC2607deF01) |
+| **Deployment Tx Hash** | `0x037d4996320061039d5632c7cede5bb021fcdb29446ddbcf3e10fea63ff820f9` |
+| **Deployer / Owner** | `0xB9BA425A04E8BbDD74eeDa5c668e8F5f32A1eA97` |
 
 ---
 

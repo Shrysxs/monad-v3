@@ -227,11 +227,13 @@ export type OverallVerdictStatus =
   | "MATCHING_AUTHENTICATED_RELEASE"  // Signature valid, hash matches, onchain status Active
   | "HASH_MISMATCH"                   // Manifest valid, but file bytes differ from reference
   | "INVALID_MANIFEST_SIGNATURE"      // Manifest signature check failed
+  | "UNAUTHORIZED_KEY"                // Key used is not authorized for this publisher on-chain
   | "REVOKED_RELEASE"                 // File matches, but on-chain release is revoked
   | "SUPERSEDED_RELEASE"              // File matches, but on-chain release is superseded
   | "UNKNOWN_RELEASE"                 // No authenticated release reference found
   | "SECURITY_FLAGGED"                // Authentic, but scanner evidence raised active threats
   | "CONFLICTING_EVIDENCE"            // Discrepancy between publishers or verifiers
+  | "NETWORK_ERROR"                   // Network or RPC communication failure
   | "VERIFICATION_ERROR";             // Runtime or parse failure
 
 export interface VerificationVerdict {

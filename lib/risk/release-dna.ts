@@ -33,6 +33,8 @@ export interface ComparisonDiff {
   versionB?: string;
   statusA: ReleaseLifecycleStatus;
   statusB: ReleaseLifecycleStatus;
+  onChainLineageVerified?: boolean;
+  onChainPredecessor?: "A" | "B" | "NONE";
   chunkDiff?: {
     chunksA: number;
     chunksB: number;
@@ -112,6 +114,28 @@ export function compareArtifacts(
     };
   }
 
+  // On-chain lineage check
+  const recA = artifactA.releaseRecord;
+  const recB = artifactB.releaseRecord;
+  let onChainLineageVerified = false;
+  let onChainPredecessor: "A" | "B" | "NONE" = "NONE";
+
+  if (recA && recB) {
+    const prevA = recA.previousReleaseDigest?.toLowerCase().replace(/^0x/, "");
+    const prevB = recB.previousReleaseDigest?.toLowerCase().replace(/^0x/, "");
+    const digA = recA.releaseDigest?.toLowerCase().replace(/^0x/, "");
+    const digB = recB.releaseDigest?.toLowerCase().replace(/^0x/, "");
+    const zero = "0000000000000000000000000000000000000000000000000000000000000000";
+
+    if (prevA && prevA !== zero && prevA === digB) {
+      onChainLineageVerified = true;
+      onChainPredecessor = "B";
+    } else if (prevB && prevB !== zero && prevB === digA) {
+      onChainLineageVerified = true;
+      onChainPredecessor = "A";
+    }
+  }
+
   // Determine relationship classification
   let relationship: VariantRelationship;
   let verdictTitle: string;
@@ -125,6 +149,13 @@ export function compareArtifacts(
     relationship = "REVOKED_VARIANT";
     verdictTitle = "Revoked Release Detected";
     explanation = "At least one compared artifact is associated with a release explicitly revoked on Monad.";
+  } else if (onChainLineageVerified) {
+    relationship = "SUPERSEDED_VARIANT";
+    verdictTitle = "Authenticated On-Chain Supersession";
+    explanation =
+      onChainPredecessor === "B"
+        ? `On-chain lineage confirmed: Artifact A (${verA ?? "new"}) explicitly supersedes Artifact B (${verB ?? "old"}) on Monad Testnet.`
+        : `On-chain lineage confirmed: Artifact B (${verB ?? "new"}) explicitly supersedes Artifact A (${verA ?? "old"}) on Monad Testnet.`;
   } else if (statusA === "SUPERSEDED" || statusB === "SUPERSEDED") {
     relationship = "SUPERSEDED_VARIANT";
     verdictTitle = "Superseded Historical Version";
@@ -154,6 +185,8 @@ export function compareArtifacts(
     versionB: verB,
     statusA,
     statusB,
+    onChainLineageVerified,
+    onChainPredecessor,
     chunkDiff,
   };
 

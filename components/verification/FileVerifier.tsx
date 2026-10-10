@@ -12,6 +12,8 @@ import {
   XCircle,
   RefreshCw,
   Info,
+  HelpCircle,
+  WifiOff,
 } from "lucide-react";
 import { verifyFileAgainstManifest } from "@/lib/verification/engine";
 import { parseAndValidateManifest } from "@/lib/manifests/manifest";
@@ -22,7 +24,10 @@ import {
   type DemoFixtureItem,
 } from "@/lib/demo-data/fixtures";
 import { ChunkMatrix } from "./ChunkMatrix";
-import { fetchOnChainReleaseByFileHash } from "@/lib/chain/contract";
+import {
+  fetchOnChainReleaseByFileHash,
+  fetchPublisherById,
+} from "@/lib/chain/contract";
 import type {
   VerificationVerdict,
   SignedReleaseManifest,
@@ -89,6 +94,7 @@ export function FileVerifier() {
       setFileBytes(new Uint8Array(buffer));
       setIsDemoData(false);
       setSelectedFixtureId("custom");
+      setOnChainRecord(undefined); // Clear demo fixture record
       setVerdict(null);
       setErrorMessage(null);
     } catch (err) {
@@ -105,6 +111,8 @@ export function FileVerifier() {
       const text = await file.text();
       setManifestText(text);
       setIsDemoData(false);
+      setSelectedFixtureId("custom");
+      setOnChainRecord(undefined); // Clear demo fixture record
       setVerdict(null);
       setErrorMessage(null);
     } catch (err) {
@@ -140,19 +148,29 @@ export function FileVerifier() {
 
       setActiveManifest(parsed.manifest);
 
-      // Check on-chain registry if no preset record active
+      // Check on-chain registry for publisher and release
       let effectiveRecord = onChainRecord;
-      if (!effectiveRecord) {
-        try {
+      let authorizedPubKeyFromChain: string | null = null;
+      let networkErrorMsg: string | null = null;
+
+      try {
+        // Query publisher authorization from Monad Testnet registry
+        const publisherInfo = await fetchPublisherById(parsed.manifest.publisherId);
+        if (publisherInfo) {
+          authorizedPubKeyFromChain = publisherInfo.ed25519PubKey;
+        }
+
+        // If not using a preset fixture record, query the registry by file hash
+        if (!effectiveRecord) {
           const liveRecord = await fetchOnChainReleaseByFileHash(
             ("0x" + parsed.manifest.sha256) as `0x${string}`
           );
           if (liveRecord) {
             effectiveRecord = liveRecord;
           }
-        } catch {
-          // Graceful fallback
         }
+      } catch (netErr: any) {
+        networkErrorMsg = netErr?.message || "Failed to query Monad Testnet RPC";
       }
 
       // 2. Run verification engine
@@ -162,6 +180,8 @@ export function FileVerifier() {
         manifest: parsed.manifest,
         publisherPublicKeyHex: publisherPubKey.trim(),
         onChainRecord: effectiveRecord,
+        authorizedPublisherPubKeyHex: authorizedPubKeyFromChain,
+        networkError: networkErrorMsg,
       });
 
       setVerdict(res);
@@ -337,10 +357,16 @@ export function FileVerifier() {
             className={`rounded-2xl border p-6 space-y-4 ${
               verdict.status === "MATCHING_AUTHENTICATED_RELEASE"
                 ? "bg-emerald-950/20 border-emerald-800/60"
-                : verdict.status === "REVOKED_RELEASE"
+                : verdict.status === "REVOKED_RELEASE" ||
+                  verdict.status === "INVALID_MANIFEST_SIGNATURE" ||
+                  verdict.status === "UNAUTHORIZED_KEY" ||
+                  verdict.status === "VERIFICATION_ERROR"
                 ? "bg-rose-950/30 border-rose-800/80"
-                : verdict.status === "HASH_MISMATCH"
+                : verdict.status === "HASH_MISMATCH" ||
+                  verdict.status === "NETWORK_ERROR"
                 ? "bg-amber-950/20 border-amber-800/60"
+                : verdict.status === "SUPERSEDED_RELEASE"
+                ? "bg-blue-950/20 border-blue-800/60"
                 : "bg-gray-900/60 border-gray-800"
             }`}
           >
@@ -356,8 +382,20 @@ export function FileVerifier() {
                   {verdict.status === "HASH_MISMATCH" && (
                     <AlertTriangle className="w-6 h-6 text-amber-400" />
                   )}
-                  {verdict.status === "REVOKED_RELEASE" && (
+                  {(verdict.status === "REVOKED_RELEASE" ||
+                    verdict.status === "INVALID_MANIFEST_SIGNATURE" ||
+                    verdict.status === "UNAUTHORIZED_KEY" ||
+                    verdict.status === "VERIFICATION_ERROR") && (
                     <ShieldAlert className="w-6 h-6 text-rose-400" />
+                  )}
+                  {verdict.status === "SUPERSEDED_RELEASE" && (
+                    <Info className="w-6 h-6 text-blue-400" />
+                  )}
+                  {verdict.status === "UNKNOWN_RELEASE" && (
+                    <HelpCircle className="w-6 h-6 text-gray-400" />
+                  )}
+                  {verdict.status === "NETWORK_ERROR" && (
+                    <WifiOff className="w-6 h-6 text-amber-400" />
                   )}
                   <span>{verdict.status.replace(/_/g, " ")}</span>
                 </h3>
@@ -367,9 +405,17 @@ export function FileVerifier() {
                 className={`px-3 py-1 rounded-full text-xs font-mono font-bold border ${
                   verdict.status === "MATCHING_AUTHENTICATED_RELEASE"
                     ? "bg-emerald-950 text-emerald-300 border-emerald-700"
-                    : verdict.status === "REVOKED_RELEASE"
+                    : verdict.status === "REVOKED_RELEASE" ||
+                      verdict.status === "INVALID_MANIFEST_SIGNATURE" ||
+                      verdict.status === "UNAUTHORIZED_KEY" ||
+                      verdict.status === "VERIFICATION_ERROR"
                     ? "bg-rose-950 text-rose-300 border-rose-700"
-                    : "bg-amber-950 text-amber-300 border-amber-700"
+                    : verdict.status === "SUPERSEDED_RELEASE"
+                    ? "bg-blue-950 text-blue-300 border-blue-700"
+                    : verdict.status === "HASH_MISMATCH" ||
+                      verdict.status === "NETWORK_ERROR"
+                    ? "bg-amber-950 text-amber-300 border-amber-700"
+                    : "bg-gray-900 text-gray-300 border-gray-700"
                 }`}
               >
                 {verdict.status}

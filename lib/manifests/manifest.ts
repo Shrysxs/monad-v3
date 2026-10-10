@@ -1,6 +1,6 @@
 import { canonicalizeRfc8785 } from "../crypto/canonicalize";
 import { sha256Text } from "../crypto/hashing";
-import { verifyEd25519Signature, normalizeHex } from "../crypto/ed25519";
+import { verifyEd25519Signature, signEd25519Message, normalizeHex } from "../crypto/ed25519";
 import type {
   SignedReleaseManifest,
   ReleaseManifestPayload,
@@ -208,4 +208,31 @@ export async function verifyManifestSignature(
       message: `Cryptographic verification error: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
+}
+
+/**
+ * Creates and cryptographically signs a release manifest using RFC 8785 canonicalization.
+ */
+export async function createSignedManifest(
+  payload: ReleaseManifestPayload,
+  privateKeyHex: string
+): Promise<SignedReleaseManifest> {
+  const canonicalPayload = canonicalizeRfc8785(payload);
+  const signature = signEd25519Message(canonicalPayload, privateKeyHex);
+  return {
+    ...payload,
+    signature,
+  };
+}
+
+/**
+ * Computes the 32-byte RFC 8785 manifest digest for on-chain binding.
+ */
+export async function computeManifestDigest(
+  manifestOrPayload: ReleaseManifestPayload | SignedReleaseManifest
+): Promise<`0x${string}`> {
+  const { signature, ...payload } = manifestOrPayload as SignedReleaseManifest;
+  const canonical = canonicalizeRfc8785(payload);
+  const hash = await sha256Text(canonical);
+  return `0x${hash}` as `0x${string}`;
 }

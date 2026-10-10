@@ -156,4 +156,17 @@ describe("SwarmTrace E2E Cryptographic & Registry Verification Pipeline", () => 
     expect(riskReport.assessment).toBe("REVOKED_RELEASE");
     expect(riskReport.provenanceScore).toBe(0);
   });
+
+  it("calculates deterministic release digest matching Solidity abi.encode exactly", () => {
+    const pId = "org.swarmtrace.core";
+    const prodId = "swarmtrace-client";
+    const ver = "1.2.0";
+    const fHash = "0x4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a" as `0x${string}`;
+    const mDigest = "0x8fae8f81a70295da9be68d90faea2050b44cb72e73708bb04cf93f415c138d61" as `0x${string}`;
+
+    const digest = calculateReleaseDigest(pId, prodId, ver, fHash, mDigest);
+
+    // Verified against Foundry SwarmTraceRegistry.calculateReleaseDigest
+    expect(digest).toBe("0xa7bbd0212bb7cab8c33e162899c24b0f017076ce2cb35bda5f884af20e982e39");
+  });
 });

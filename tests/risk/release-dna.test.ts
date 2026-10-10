@@ -188,4 +188,43 @@ describe("Release DNA Forensics Engine", () => {
     expect(comparison.diff.chunkDiff?.identicalChunks).toBe(2);
     expect(comparison.diff.chunkDiff?.differingChunks).toBe(2);
   });
+
+  it("verifies direct on-chain supersession lineage via previousReleaseDigest", () => {
+    const v1Digest = "0x1111000000000000000000000000000000000000000000000000000000000000";
+    const v2Digest = "0x2222000000000000000000000000000000000000000000000000000000000000";
+
+    const artifactV1: ArtifactProfile = {
+      id: "art-v1",
+      fileName: "node-v1.0.tar.gz",
+      fileSize: 1000,
+      sha256: "1111111111111111111111111111111111111111111111111111111111111111",
+      releaseRecord: {
+        ...activeRecordA,
+        releaseDigest: v1Digest,
+        releaseVersion: "1.0.0",
+        status: "SUPERSEDED",
+        previousReleaseDigest: "0x0000000000000000000000000000000000000000000000000000000000000000",
+      },
+    };
+
+    const artifactV2: ArtifactProfile = {
+      id: "art-v2",
+      fileName: "node-v2.0.tar.gz",
+      fileSize: 1100,
+      sha256: "2222222222222222222222222222222222222222222222222222222222222222",
+      releaseRecord: {
+        ...activeRecordA,
+        releaseDigest: v2Digest,
+        releaseVersion: "2.0.0",
+        status: "ACTIVE",
+        previousReleaseDigest: v1Digest,
+      },
+    };
+
+    const comparison = compareArtifacts(artifactV2, artifactV1);
+    expect(comparison.relationship).toBe("SUPERSEDED_VARIANT");
+    expect(comparison.diff.onChainLineageVerified).toBe(true);
+    expect(comparison.diff.onChainPredecessor).toBe("B");
+    expect(comparison.verdictTitle).toBe("Authenticated On-Chain Supersession");
+  });
 });

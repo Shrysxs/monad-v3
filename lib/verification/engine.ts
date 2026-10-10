@@ -17,6 +17,7 @@ export interface VerifyFileOptions {
   publisherPublicKeyHex: string;
   onChainRecord?: ReleaseRecord | null;
   authorizedPublisherPubKeyHex?: string | null;
+  networkError?: string | null;
 }
 
 /**
@@ -32,6 +33,7 @@ export async function verifyFileAgainstManifest(
     publisherPublicKeyHex,
     onChainRecord,
     authorizedPublisherPubKeyHex,
+    networkError,
   } = options;
 
   const explanations: string[] = [];
@@ -72,13 +74,37 @@ export async function verifyFileAgainstManifest(
   const expectedSha256 = manifest.sha256.toLowerCase();
   const isHashMatch = computedSha256 === expectedSha256;
 
-  // 3. Piece/Chunk Verification if provided
+  // 3. Piece/Chunk Verification ONLY when manifest provides valid and complete chunk metadata
   let chunkDetails: ChunkIntegrityResult[] | undefined;
   let chunksMatched = 0;
   let chunksTotal = 0;
 
-  if (manifest.chunkSize && manifest.chunkHashes && manifest.chunkHashes.length > 0) {
-    chunksTotal = manifest.chunkHashes.length;
+  const hasChunkMeta =
+    typeof manifest.chunkSize === "number" &&
+    manifest.chunkSize > 0 &&
+    Array.isArray(manifest.chunkHashes) &&
+    manifest.chunkHashes.length > 0;
+
+  const expectedChunkCount =
+    manifest.chunkSize && manifest.chunkSize > 0
+      ? fileBytes.byteLength === 0
+        ? 0
+        : Math.ceil(fileBytes.byteLength / manifest.chunkSize)
+      : -1;
+
+  const isChunkMetaComplete =
+    hasChunkMeta &&
+    manifest.chunkHashes!.length === expectedChunkCount &&
+    manifest.chunkHashes!.every(
+      (h) => typeof h === "string" && /^[0-9a-fA-F]{64}$/.test(h.replace(/^0x/, ""))
+    );
+
+  if (hasChunkMeta && !isChunkMetaComplete) {
+    explanations.push(
+      `Chunk verification skipped: Manifest chunk metadata is incomplete or inconsistent with file size (${manifest.chunkHashes?.length ?? 0} chunk hashes provided, expected ${expectedChunkCount}).`
+    );
+  } else if (isChunkMetaComplete && manifest.chunkSize) {
+    chunksTotal = manifest.chunkHashes!.length;
     chunkDetails = [];
     const chunkSize = manifest.chunkSize;
 
@@ -87,7 +113,7 @@ export async function verifyFileAgainstManifest(
       const byteEnd = Math.min(byteStart + chunkSize, fileBytes.byteLength);
       const pieceSlice = fileBytes.subarray(byteStart, byteEnd);
       const pieceHash = await sha256Bytes(pieceSlice);
-      const expectedPieceHash = manifest.chunkHashes[i].toLowerCase();
+      const expectedPieceHash = manifest.chunkHashes![i].toLowerCase().replace(/^0x/, "");
 
       const pieceMatch = pieceHash === expectedPieceHash;
       if (pieceMatch) chunksMatched++;
@@ -172,7 +198,7 @@ export async function verifyFileAgainstManifest(
         );
       }
     }
-  } else {
+  } else if (!networkError) {
     explanations.push("No corresponding release commitment was found on Monad Testnet.");
   }
 
@@ -180,7 +206,14 @@ export async function verifyFileAgainstManifest(
   let overallStatus: OverallVerdictStatus;
   let summary: string;
 
-  if (!signatureResult.isValid) {
+  if (networkError) {
+    overallStatus = "NETWORK_ERROR";
+    summary = `Network error communicating with Monad Testnet: ${networkError}. On-chain verification could not be completed.`;
+    explanations.push(`Network communication error: ${networkError}`);
+  } else if (signatureResult.status === "KEY_UNAUTHORIZED") {
+    overallStatus = "UNAUTHORIZED_KEY";
+    summary = "The key used to verify the manifest is not authorized for this publisher on Monad Testnet.";
+  } else if (!signatureResult.isValid) {
     overallStatus = "INVALID_MANIFEST_SIGNATURE";
     summary = "Manifest signature is invalid. The release manifest cannot be authenticated.";
   } else if (!isHashMatch) {

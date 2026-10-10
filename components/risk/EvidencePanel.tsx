@@ -12,6 +12,11 @@ import {
   Clock,
   Sliders,
   Info,
+  Upload,
+  Search,
+  RefreshCw,
+  Database,
+  FileCode,
 } from "lucide-react";
 import {
   aggregateRiskIntelligence,
@@ -23,6 +28,9 @@ import {
   DEMO_MONAD_PUBLISHER,
   type DemoFixtureItem,
 } from "@/lib/demo-data/fixtures";
+import { sha256Bytes } from "@/lib/crypto/hashing";
+import { parseAndValidateManifest, verifyManifestSignature } from "@/lib/manifests/manifest";
+import { fetchOnChainReleaseByFileHash } from "@/lib/chain/contract";
 import type {
   FileIntegrityResult,
   SignatureVerificationResult,
@@ -30,10 +38,18 @@ import type {
 } from "@/lib/verification/types";
 
 export function EvidencePanel() {
+  const [mode, setMode] = useState<"real" | "demo">("real");
   const [fixtures, setFixtures] = useState<DemoFixtureItem[]>([]);
   const [selectedFixtureId, setSelectedFixtureId] = useState<string>("fixture-authentic-ubuntu");
   const [simulateScannerThreat, setSimulateScannerThreat] = useState<boolean>(false);
   const [report, setReport] = useState<RiskIntelligenceReport | null>(null);
+
+  // Custom artifact evaluation state
+  const [customFile, setCustomFile] = useState<File | null>(null);
+  const [customManifestText, setCustomManifestText] = useState<string>("");
+  const [customPubKeyHex, setCustomPubKeyHex] = useState<string>("");
+  const [isEvaluatingCustom, setIsEvaluatingCustom] = useState<boolean>(false);
+  const [customError, setCustomError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -54,7 +70,6 @@ export function EvidencePanel() {
     if (!fixture) return;
 
     const isTampered = fixture.id.includes("tampered") || fixture.id.includes("repack");
-
     const chunksCount = fixture.manifest.chunkHashes?.length ?? 0;
 
     const fileIntegrity: FileIntegrityResult = {
@@ -91,9 +106,9 @@ export function EvidencePanel() {
         id: "simulated-scanner-finding",
         sourceId: "virustotal-community-heuristics",
         sourceType: "STATIC_SCANNER",
-        title: "Heuristic Signature Detection: Trojan.Dropper.Gen",
+        title: "Simulated Scanner Finding: Suspicious Heuristic Trigger",
         description:
-          "Static analysis flagged suspicious obfuscated shell script embedding.",
+          "Static analysis flagged suspicious obfuscated payload pattern (SIMULATED TEST VECTOR).",
         status: "FLAGGED",
         observedAt: Date.now(),
         isStale: false,
@@ -112,60 +127,284 @@ export function EvidencePanel() {
     setReport(calculatedReport);
   }
 
-  function handleFixtureChange(id: string) {
-    evaluateFixture(id, fixtures, simulateScannerThreat);
-  }
+  async function handleEvaluateCustomArtifact(e: React.FormEvent) {
+    e.preventDefault();
+    if (!customFile && !customManifestText.trim()) {
+      setCustomError("Please select a target file or supply a manifest JSON.");
+      return;
+    }
 
-  function handleThreatToggle(simulated: boolean) {
-    setSimulateScannerThreat(simulated);
-    evaluateFixture(selectedFixtureId, fixtures, simulated);
+    setIsEvaluatingCustom(true);
+    setCustomError(null);
+
+    try {
+      let fileSha256 = "";
+      let fileName = "Uploaded File";
+      let fileSize = 0;
+
+      if (customFile) {
+        const buffer = await customFile.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        fileSha256 = await sha256Bytes(bytes);
+        fileName = customFile.name;
+        fileSize = bytes.byteLength;
+      }
+
+      let parsedManifest = undefined;
+      if (customManifestText.trim()) {
+        const parsed = await parseAndValidateManifest(customManifestText);
+        if (parsed.valid) {
+          parsedManifest = parsed.manifest;
+          if (!fileSha256) fileSha256 = parsed.manifest.sha256;
+          if (fileName === "Uploaded File") fileName = parsed.manifest.fileName;
+          if (!fileSize) fileSize = parsed.manifest.fileSize;
+        } else {
+          setCustomError(`Manifest validation error: ${parsed.message}`);
+          setIsEvaluatingCustom(false);
+          return;
+        }
+      }
+
+      // 1. File Integrity
+      const isHashMatch = parsedManifest ? fileSha256 === parsedManifest.sha256.toLowerCase() : true;
+      const fileIntegrity: FileIntegrityResult = {
+        status: isHashMatch ? "MATCH" : "MISMATCH",
+        fileName,
+        fileSize,
+        computedSha256: fileSha256,
+        expectedSha256: parsedManifest?.sha256,
+        message: isHashMatch
+          ? "SHA-256 computed locally via Web Crypto API matches reference."
+          : `SHA-256 digest mismatch (${fileSha256.slice(0, 10)}... != ${parsedManifest?.sha256.slice(0, 10)}...).`,
+      };
+
+      // 2. Signature verification if manifest and key provided
+      let signatureVerification: SignatureVerificationResult;
+      if (parsedManifest && customPubKeyHex.trim()) {
+        signatureVerification = await verifyManifestSignature(
+          parsedManifest,
+          customPubKeyHex.trim()
+        );
+      } else {
+        signatureVerification = {
+          status: "KEY_NOT_FOUND",
+          isValid: false,
+          publisherId: parsedManifest?.publisherId || "unspecified",
+          keyId: parsedManifest?.publisherKeyId || "unspecified",
+          publicKeyUsed: customPubKeyHex.trim() || "none",
+          canonicalPayload: "",
+          computedManifestDigest: "",
+          message: "No publisher Ed25519 public key supplied for signature validation.",
+        };
+      }
+
+      // 3. Query on-chain release record
+      let onChainRecord = null;
+      try {
+        if (fileSha256) {
+          onChainRecord = await fetchOnChainReleaseByFileHash(
+            ("0x" + fileSha256) as `0x${string}`
+          );
+        }
+      } catch {
+        // Fallback
+      }
+
+      const calculatedReport = aggregateRiskIntelligence({
+        fileIntegrity,
+        signatureVerification,
+        releaseRecord: onChainRecord,
+      });
+
+      setReport(calculatedReport);
+    } catch (err: any) {
+      setCustomError(err.message || "Failed to evaluate artifact risk intelligence.");
+    } finally {
+      setIsEvaluatingCustom(false);
+    }
   }
 
   return (
     <div className="space-y-8">
-      {/* Target Selector and Simulation Controls */}
-      <div className="rounded-xl border border-emerald-900/60 bg-emerald-950/20 p-4 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center space-x-2">
-            <span className="inline-flex items-center rounded bg-emerald-900/60 px-2 py-0.5 text-[11px] font-medium text-emerald-300 border border-emerald-700/50">
-              EVIDENCE TARGET
-            </span>
-            <span className="text-xs text-gray-400">
-              Select release artifact to evaluate multi-source risk evidence:
-            </span>
+      {/* Mode Selector Tabs */}
+      <div className="flex border-b border-gray-800 space-x-2">
+        <button
+          type="button"
+          onClick={() => setMode("real")}
+          className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors flex items-center space-x-2 ${
+            mode === "real"
+              ? "bg-gray-900 text-emerald-400 border-t border-x border-gray-800"
+              : "text-gray-400 hover:text-gray-200"
+          }`}
+        >
+          <Activity className="w-4 h-4" />
+          <span>Evaluate Live Artifact Evidence</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMode("demo");
+            evaluateFixture("fixture-authentic-ubuntu");
+          }}
+          className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors flex items-center space-x-2 ${
+            mode === "demo"
+              ? "bg-gray-900 text-emerald-400 border-t border-x border-gray-800"
+              : "text-gray-400 hover:text-gray-200"
+          }`}
+        >
+          <Database className="w-4 h-4" />
+          <span>Demo Fixtures & Threat Simulation</span>
+        </button>
+      </div>
+
+      {/* Mode 1: Live Artifact Evaluation */}
+      {mode === "real" && (
+        <form onSubmit={handleEvaluateCustomArtifact} className="rounded-2xl border border-gray-800 bg-gray-900/30 p-6 space-y-4">
+          <div className="space-y-1">
+            <h4 className="text-sm font-semibold text-white flex items-center space-x-2">
+              <Search className="w-4 h-4 text-emerald-400" />
+              <span>Inspect Real Evidence for Downloaded Artifact</span>
+            </h4>
+            <p className="text-xs text-gray-400">
+              Select a downloaded file or paste a signed release manifest to synthesize verified
+              cryptographic integrity, Monad on-chain commitments, and scanner status.
+            </p>
           </div>
 
-          {/* Scanner Threat Simulation Toggle */}
-          <div className="flex items-center space-x-2 text-xs">
-            <Sliders className="w-3.5 h-3.5 text-emerald-400" />
-            <label className="text-gray-300 cursor-pointer flex items-center space-x-2">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs text-gray-400 font-medium">Target Local File:</label>
               <input
-                type="checkbox"
-                checked={simulateScannerThreat}
-                onChange={(e) => handleThreatToggle(e.target.checked)}
-                className="rounded bg-gray-900 border-gray-700 text-emerald-500 focus:ring-emerald-600"
+                type="file"
+                onChange={(e) => setCustomFile(e.target.files?.[0] || null)}
+                className="w-full text-xs text-gray-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-gray-800 file:text-gray-200 hover:file:bg-gray-700 cursor-pointer"
               />
-              <span>Simulate External Scanner Threat Detection</span>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-gray-400 font-medium">
+                Publisher Public Key (Hex, optional):
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 8580e9bff5..."
+                value={customPubKeyHex}
+                onChange={(e) => setCustomPubKeyHex(e.target.value)}
+                className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-1.5 text-xs text-white font-mono focus:border-emerald-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs text-gray-400 font-medium">
+              Signed Release Manifest JSON (Optional):
             </label>
+            <textarea
+              rows={3}
+              placeholder="Paste signed manifest JSON if available..."
+              value={customManifestText}
+              onChange={(e) => setCustomManifestText(e.target.value)}
+              className="w-full rounded-lg bg-gray-950 border border-gray-800 p-2 text-[11px] text-gray-300 font-mono focus:border-emerald-500 focus:outline-none resize-none"
+            />
+          </div>
+
+          <div className="flex justify-start">
+            <button
+              type="submit"
+              disabled={isEvaluatingCustom}
+              className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition-all shadow-md shadow-emerald-950 flex items-center space-x-2 disabled:cursor-not-allowed"
+            >
+              {isEvaluatingCustom ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Synthesizing evidence...</span>
+                </>
+              ) : (
+                <>
+                  <Activity className="w-3.5 h-3.5" />
+                  <span>Synthesize Live Risk Intelligence</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {customError && (
+            <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-800/80 text-rose-300 text-xs flex items-center space-x-2">
+              <ShieldAlert className="w-4 h-4 shrink-0" />
+              <span>{customError}</span>
+            </div>
+          )}
+        </form>
+      )}
+
+      {/* Mode 2: Demo Fixtures & Simulations */}
+      {mode === "demo" && (
+        <div className="rounded-xl border border-emerald-900/60 bg-emerald-950/20 p-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center space-x-2">
+              <span className="inline-flex items-center rounded bg-emerald-900/60 px-2 py-0.5 text-[11px] font-medium text-emerald-300 border border-emerald-700/50 font-mono">
+                DEMO DATA FIXTURES
+              </span>
+              <span className="text-xs text-gray-400">
+                Select pre-built release artifact to evaluate multi-source risk evidence:
+              </span>
+            </div>
+
+            {/* Scanner Threat Simulation Toggle */}
+            <div className="flex items-center space-x-2 text-xs">
+              <Sliders className="w-3.5 h-3.5 text-emerald-400" />
+              <label className="text-gray-300 cursor-pointer flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  checked={simulateScannerThreat}
+                  onChange={(e) => {
+                    setSimulateScannerThreat(e.target.checked);
+                    evaluateFixture(selectedFixtureId, fixtures, e.target.checked);
+                  }}
+                  className="rounded bg-gray-900 border-gray-700 text-emerald-500 focus:ring-emerald-600"
+                />
+                <span>Simulate External Scanner Threat Detection (Demo)</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {fixtures.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => evaluateFixture(f.id, fixtures, simulateScannerThreat)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  selectedFixtureId === f.id
+                    ? "bg-emerald-600 text-white shadow-lg shadow-emerald-950"
+                    : "bg-gray-900 text-gray-300 hover:bg-gray-800 border border-gray-800"
+                }`}
+              >
+                {f.name}
+              </button>
+            ))}
           </div>
         </div>
+      )}
 
-        <div className="flex flex-wrap gap-2">
-          {fixtures.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => handleFixtureChange(f.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                selectedFixtureId === f.id
-                  ? "bg-emerald-600 text-white shadow-lg shadow-emerald-950"
-                  : "bg-gray-900 text-gray-300 hover:bg-gray-800 border border-gray-800"
-              }`}
-            >
-              {f.name}
-            </button>
-          ))}
+      {/* Prominent Evidence & Malware Policy Notice */}
+      <div className="rounded-xl border border-gray-800 bg-gray-950/70 p-4 space-y-2">
+        <div className="text-xs font-semibold text-gray-300 flex items-center space-x-2">
+          <Info className="w-4 h-4 text-cyan-400 shrink-0" />
+          <span>Core Security Axiom: Provenance Confidence vs. Malware Status</span>
         </div>
+        <p className="text-xs text-gray-400 leading-relaxed">
+          The <span className="text-emerald-400 font-semibold">Provenance Score (0–100%)</span> measures
+          verified cryptographic authorship (Ed25519) and Monad on-chain commitment status only.{" "}
+          <strong className="text-gray-200">
+            It does NOT imply that a file is malware-free.
+          </strong>{" "}
+          An authentic binary signed by a legitimate publisher can still contain zero-day vulnerabilities,
+          backdoors, or malicious logic if the publisher build pipeline was compromised.
+          If no external malware scanner was executed, scanner status is explicitly displayed as{" "}
+          <span className="font-mono text-cyan-400">UNAVAILABLE</span> and is never faked as clean.
+        </p>
       </div>
 
       {report && (
@@ -249,7 +488,7 @@ export function EvidencePanel() {
               {report.findings.map((f) => {
                 const isPositive = f.status === "POSITIVE";
                 const isFlagged = f.status === "FLAGGED";
-                const isUnavailable = f.status === "UNAVAILABLE";
+                const isUnavailable = f.status === "UNAVAILABLE" || f.status === "NOT_SCANNED";
 
                 return (
                   <div
@@ -266,7 +505,7 @@ export function EvidencePanel() {
                         </span>
                         {f.demoOnly && (
                           <span className="text-[9px] bg-purple-950 text-purple-300 border border-purple-800 px-1.5 py-0.2 rounded font-mono">
-                            DEMO
+                            SIMULATED FINDING (DEMO)
                           </span>
                         )}
                       </div>

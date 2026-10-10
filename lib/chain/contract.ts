@@ -1,4 +1,11 @@
-import { getContract, keccak256, encodePacked, type PublicClient, type WalletClient } from "viem";
+import {
+  getContract,
+  keccak256,
+  encodeAbiParameters,
+  parseAbiParameters,
+  type PublicClient,
+  type WalletClient,
+} from "viem";
 import SWARMTRACE_REGISTRY_ABI from "./abis/SwarmTraceRegistry.json";
 import { monadTestnet, monadPublicClient } from "./monad";
 import type { ReleaseRecord, ReleaseLifecycleStatus } from "../verification/types";
@@ -7,7 +14,7 @@ export { SWARMTRACE_REGISTRY_ABI };
 
 /**
  * Calculates canonical release digest matching ISwarmTraceRegistry.sol:
- * keccak256(abi.encodePacked(publisherId, productId, releaseVersion, fileHash, manifestDigest))
+ * keccak256(abi.encode(publisherId, productId, releaseVersion, fileHash, manifestDigest))
  */
 export function calculateReleaseDigest(
   publisherId: string,
@@ -17,8 +24,8 @@ export function calculateReleaseDigest(
   manifestDigest: `0x${string}`
 ): `0x${string}` {
   return keccak256(
-    encodePacked(
-      ["string", "string", "string", "bytes32", "bytes32"],
+    encodeAbiParameters(
+      parseAbiParameters("string, string, string, bytes32, bytes32"),
       [publisherId, productId, releaseVersion, fileHash, manifestDigest]
     )
   );
@@ -38,11 +45,26 @@ export function getRegistryAddress(): `0x${string}` {
 }
 
 /**
+ * Checks whether the SwarmTraceRegistry contract has a configured, non-zero address.
+ */
+export function isRegistryConfigured(): boolean {
+  const addr = getRegistryAddress();
+  return addr !== "0x0000000000000000000000000000000000000000";
+}
+
+/**
  * Creates a typed viem contract instance for SwarmTraceRegistry.
+ * Throws if the registry address is unset or zero address to prevent silent execution against null target.
  */
 export function getSwarmTraceRegistryContract(client: PublicClient | WalletClient) {
+  const address = getRegistryAddress();
+  if (address === "0x0000000000000000000000000000000000000000") {
+    throw new Error(
+      "SwarmTraceRegistry address is unconfigured (0x0). Set NEXT_PUBLIC_SWARMTRACE_REGISTRY_ADDRESS in environment."
+    );
+  }
   return getContract({
-    address: getRegistryAddress(),
+    address,
     abi: SWARMTRACE_REGISTRY_ABI,
     client,
   });
@@ -136,6 +158,82 @@ export async function checkPublisherAuthorization(
     return (await (contract.read as any).isAuthorizedPublisher([publisherAddress])) as boolean;
   } catch {
     return false;
+  }
+}
+
+export interface OnChainPublisherInfo {
+  publisherAddress: `0x${string}`;
+  publisherId: string;
+  ed25519PubKey: `0x${string}`;
+  authorizedAt: number;
+  isAuthorized: boolean;
+}
+
+/**
+ * Queries publisher information by publisherId from Monad Testnet.
+ */
+export async function fetchPublisherById(
+  publisherId: string
+): Promise<OnChainPublisherInfo | null> {
+  const address = getRegistryAddress();
+  if (address === "0x0000000000000000000000000000000000000000") {
+    return null;
+  }
+
+  try {
+    const contract = getSwarmTraceRegistryContract(monadPublicClient);
+    const result = (await (contract.read as any).getPublisherById([publisherId])) as any;
+    if (
+      !result ||
+      !result.publisherAddress ||
+      result.publisherAddress === "0x0000000000000000000000000000000000000000"
+    ) {
+      return null;
+    }
+
+    return {
+      publisherAddress: result.publisherAddress,
+      publisherId: result.publisherId,
+      ed25519PubKey: result.ed25519PubKey,
+      authorizedAt: Number(result.authorizedAt) * 1000,
+      isAuthorized: Boolean(result.isAuthorized),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Queries publisher information by address from Monad Testnet.
+ */
+export async function fetchPublisherByAddress(
+  publisherAddress: `0x${string}`
+): Promise<OnChainPublisherInfo | null> {
+  const address = getRegistryAddress();
+  if (address === "0x0000000000000000000000000000000000000000") {
+    return null;
+  }
+
+  try {
+    const contract = getSwarmTraceRegistryContract(monadPublicClient);
+    const result = (await (contract.read as any).getPublisher([publisherAddress])) as any;
+    if (
+      !result ||
+      !result.publisherAddress ||
+      result.publisherAddress === "0x0000000000000000000000000000000000000000"
+    ) {
+      return null;
+    }
+
+    return {
+      publisherAddress: result.publisherAddress,
+      publisherId: result.publisherId,
+      ed25519PubKey: result.ed25519PubKey,
+      authorizedAt: Number(result.authorizedAt) * 1000,
+      isAuthorized: Boolean(result.isAuthorized),
+    };
+  } catch {
+    return null;
   }
 }
 

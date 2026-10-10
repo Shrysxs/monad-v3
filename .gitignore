@@ -17,6 +17,9 @@ contracts/broadcast/
 .env*.local
 .env
 !.env.example
+.keys/
+*.key
+secrets/
 
 # OS / Editor artifacts
 .DS_Store

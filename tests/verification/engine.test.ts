@@ -216,9 +216,45 @@ describe("Live Swarm Integrity Verification Engine", () => {
       authorizedPublisherPubKeyHex: otherKeyPair.publicKeyHex, // Different authorized key on Monad!
     });
 
-    expect(verdict.status).toBe("INVALID_MANIFEST_SIGNATURE");
+    expect(verdict.status).toBe("UNAUTHORIZED_KEY");
     expect(verdict.signatureVerification.isValid).toBe(false);
     expect(verdict.signatureVerification.status).toBe("KEY_UNAUTHORIZED");
+  });
+
+  it("explicitly returns NETWORK_ERROR when RPC communication fails", async () => {
+    const { manifest } = await createSignedManifest(testFileBytes);
+
+    const verdict = await verifyFileAgainstManifest({
+      fileBytes: testFileBytes,
+      fileName: "swarmtrace-client-v1.0.0.tar.gz",
+      manifest,
+      publisherPublicKeyHex: keyPair.publicKeyHex,
+      networkError: "Connection refused to https://testnet-rpc.monad.xyz",
+    });
+
+    expect(verdict.status).toBe("NETWORK_ERROR");
+    expect(verdict.summary).toContain("Network error communicating with Monad Testnet");
+  });
+
+  it("skips chunk verification when manifest chunk metadata is incomplete or inconsistent", async () => {
+    const { manifest } = await createSignedManifest(testFileBytes);
+    // Incomplete chunk metadata: file is 31 bytes, chunkSize is 16, so expected 2 chunks, but only 1 provided
+    manifest.chunkHashes = ["e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"];
+
+    const verdict = await verifyFileAgainstManifest({
+      fileBytes: testFileBytes,
+      fileName: "swarmtrace-client-v1.0.0.tar.gz",
+      manifest,
+      publisherPublicKeyHex: keyPair.publicKeyHex,
+    });
+
+    // Chunk details must not be verified because metadata was incomplete
+    expect(verdict.fileIntegrity.chunkDetails).toBeUndefined();
+    expect(
+      verdict.explanations.some((e) =>
+        e.includes("Chunk verification skipped: Manifest chunk metadata is incomplete")
+      )
+    ).toBe(true);
   });
 });
 
