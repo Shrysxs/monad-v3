@@ -5,21 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ShieldCheck,
-  ShieldAlert,
   AlertTriangle,
-  CheckCircle2,
-  XCircle,
+  Check,
+  X,
   ArrowRight,
   ArrowLeft,
   RotateCcw,
   LogOut,
-  FileCode,
-  Layers,
-  GitCompare,
-  Activity,
-  Check,
-  PlayCircle,
-  Clock,
   Info,
 } from "lucide-react";
 import { getDemoFixtures, DEMO_PUBLISHER, type DemoFixtureItem } from "@/lib/demo-data/fixtures";
@@ -58,7 +50,6 @@ export function DemoWalkthrough() {
         const tampered = items.find((f) => f.id === "fixture-tampered-ubuntu") ?? items[1];
         const repacked = items.find((f) => f.id === "fixture-repacked-ubuntu") ?? items[2];
 
-        // Step 1: Run real verification on authentic fixture
         if (authentic) {
           const v1 = await verifyFileAgainstManifest({
             fileBytes: authentic.fileBytes,
@@ -70,7 +61,6 @@ export function DemoWalkthrough() {
           });
           setStep1Verdict(v1);
 
-          // Step 4: Aggregate real risk intelligence report for authentic fixture
           const r4 = aggregateRiskIntelligence({
             fileIntegrity: v1.fileIntegrity,
             signatureVerification: v1.signatureVerification,
@@ -80,7 +70,6 @@ export function DemoWalkthrough() {
           setStep4Report(r4);
         }
 
-        // Step 2: Run real verification on tampered fixture
         if (tampered) {
           const v2 = await verifyFileAgainstManifest({
             fileBytes: tampered.fileBytes,
@@ -93,7 +82,6 @@ export function DemoWalkthrough() {
           setStep2Verdict(v2);
         }
 
-        // Step 3: Compare authentic vs repacked artifact profile
         if (authentic && repacked) {
           const comp = compareArtifacts(
             {
@@ -128,38 +116,33 @@ export function DemoWalkthrough() {
   }, []);
 
   const steps = [
-    { number: 1, title: "Verify Integrity", subtitle: "Authentic Release Matching" },
-    { number: 2, title: "Detect Tampering", subtitle: "Real 1-Byte Hash Mismatch" },
-    { number: 3, title: "Explore Release DNA", subtitle: "Same-Filename Forensics" },
-    { number: 4, title: "Inspect Risk Evidence", subtitle: "Honest Multi-Source Audit" },
+    { number: 1, title: "Verify integrity", subtitle: "Authentic release matching" },
+    { number: 2, title: "Detect tampering", subtitle: "Real 1-byte hash mismatch" },
+    { number: 3, title: "Explore release history", subtitle: "Same-filename forensics" },
+    { number: 4, title: "Inspect risk report", subtitle: "Honest evidence audit" },
   ];
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto py-2">
-      {/* Top Demo Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-gradient-to-r from-cyan-950/80 via-blue-950/60 to-purple-950/80 border border-cyan-800/60 shadow-xl">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-cyan-600/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
-            <PlayCircle className="w-5 h-5" />
+    <div className="space-y-6 max-w-4xl mx-auto py-2">
+      {/* Top Demo Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-lg bg-neutral-50 border border-neutral-200">
+        <div className="space-y-0.5">
+          <div className="flex items-center space-x-2">
+            <span className="font-bold text-neutral-900 text-sm">Interactive demo walkthrough</span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-neutral-200 text-neutral-800">
+              Demo data
+            </span>
           </div>
-          <div>
-            <div className="flex items-center space-x-2">
-              <span className="font-bold text-white text-base">Penguin Trace Demo Walkthrough</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-900/80 text-cyan-300 border border-cyan-700">
-                OFFLINE-CAPABLE
-              </span>
-            </div>
-            <p className="text-xs text-gray-300">
-              Interactive 3-minute guided tour. Zero wallet connection or testnet gas required.
-            </p>
-          </div>
+          <p className="text-xs text-neutral-500">
+            A 3-minute guided tour. Zero wallet connection or testnet gas required.
+          </p>
         </div>
 
         <div className="flex items-center space-x-2">
           <button
             type="button"
             onClick={() => setCurrentStep(1)}
-            className="px-3 py-1.5 rounded-lg text-xs bg-gray-900 hover:bg-gray-800 border border-gray-700 text-gray-300 flex items-center space-x-1.5 transition-colors"
+            className="px-2.5 py-1 rounded text-xs bg-white hover:bg-neutral-100 border border-neutral-300 text-neutral-700 flex items-center space-x-1"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Restart</span>
@@ -167,16 +150,16 @@ export function DemoWalkthrough() {
           <button
             type="button"
             onClick={() => router.push("/")}
-            className="px-3 py-1.5 rounded-lg text-xs bg-rose-950/60 hover:bg-rose-900/60 border border-rose-800/80 text-rose-300 flex items-center space-x-1.5 transition-colors"
+            className="px-2.5 py-1 rounded text-xs bg-white hover:bg-neutral-100 border border-neutral-300 text-neutral-700 flex items-center space-x-1"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span>Exit Demo</span>
+            <span>Exit demo</span>
           </button>
         </div>
       </div>
 
-      {/* Stepper Progress Bar */}
-      <div className="space-y-3">
+      {/* Stepper Grid */}
+      <div className="space-y-2">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {steps.map((s) => {
             const isActive = currentStep === s.number;
@@ -186,138 +169,129 @@ export function DemoWalkthrough() {
                 key={s.number}
                 type="button"
                 onClick={() => setCurrentStep(s.number)}
-                className={`p-3 rounded-xl border text-left transition-all ${
+                className={`p-3 rounded-lg border text-left transition-colors ${
                   isActive
-                    ? "bg-cyan-950/40 border-cyan-500 shadow-md shadow-cyan-950"
+                    ? "bg-neutral-900 text-white border-neutral-900"
                     : isCompleted
-                    ? "bg-gray-900/40 border-gray-700 text-gray-300 hover:border-gray-600"
-                    : "bg-gray-950/40 border-gray-800 text-gray-500 hover:border-gray-700"
+                    ? "bg-neutral-50 border-neutral-200 text-neutral-800 hover:bg-neutral-100"
+                    : "bg-white border-neutral-200 text-neutral-500 hover:bg-neutral-50"
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-mono font-bold text-gray-400">
+                  <span className={`text-[10px] font-mono font-medium ${isActive ? "text-neutral-400" : "text-neutral-500"}`}>
                     STEP {s.number} OF 4
                   </span>
-                  {isCompleted ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  ) : isActive ? (
-                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-                  ) : null}
+                  {isCompleted && <Check className="w-3.5 h-3.5 text-emerald-600" />}
                 </div>
-                <div className={`font-semibold text-xs ${isActive ? "text-cyan-300" : "text-gray-200"}`}>
+                <div className={`font-semibold text-xs ${isActive ? "text-white" : "text-neutral-900"}`}>
                   {s.title}
                 </div>
-                <div className="text-[10px] text-gray-400 truncate">{s.subtitle}</div>
+                <div className={`text-[10px] truncate ${isActive ? "text-neutral-400" : "text-neutral-500"}`}>
+                  {s.subtitle}
+                </div>
               </button>
             );
           })}
         </div>
 
-        {/* Visual progress bar line */}
-        <div className="w-full bg-gray-900 h-1.5 rounded-full overflow-hidden">
+        {/* Minimal progress bar */}
+        <div className="w-full bg-neutral-200 h-1 rounded-full overflow-hidden">
           <div
-            className="bg-gradient-to-r from-cyan-500 to-purple-600 h-full transition-all duration-300"
+            className="bg-neutral-900 h-full transition-all duration-300"
             style={{ width: `${(currentStep / 4) * 100}%` }}
           />
         </div>
       </div>
 
       {loading ? (
-        <div className="p-12 text-center text-gray-400 space-y-2">
-          <div className="animate-spin w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full mx-auto" />
-          <p className="text-xs">Initializing cryptographic demo fixtures...</p>
+        <div className="p-12 text-center text-neutral-500 text-xs">
+          Loading sample fixtures...
         </div>
       ) : (
         <div className="space-y-6">
           {/* STEP 1: Verify Integrity */}
           {currentStep === 1 && (
-            <div className="rounded-2xl border border-gray-800 bg-gray-900/30 p-6 space-y-6 animate-in fade-in duration-300">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 pb-4">
-                <div className="space-y-1">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-950 text-purple-300 border border-purple-800">
-                    DEMO FIXTURE — AUTHENTIC RELEASE
+            <div className="rounded-lg border border-neutral-200 bg-white p-5 space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 pb-3">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-mono uppercase text-neutral-500">
+                    Step 1 of 4: Verify integrity
                   </span>
-                  <h3 className="text-lg font-bold text-white flex items-center space-x-2">
-                    <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                    <span>Step 1: Cryptographic Integrity Verification</span>
+                  <h3 className="text-base font-bold text-neutral-900">
+                    Authentic release verification
                   </h3>
                 </div>
-                <span className="text-xs font-mono text-gray-400">
-                  Target: <span className="text-cyan-300 font-semibold">ubuntu-24.04-desktop-amd64.iso</span>
+                <span className="text-xs font-mono text-neutral-600">
+                  Target: <span className="text-neutral-900 font-semibold">ubuntu-24.04-desktop-amd64.iso</span>
                 </span>
               </div>
 
               {step1Verdict && (
-                <div className="space-y-5">
-                  {/* Verdict Badge */}
-                  <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-800/80 flex items-center space-x-3">
-                    <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
+                <div className="space-y-4">
+                  {/* Verdict Banner */}
+                  <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center space-x-3 text-xs">
+                    <Check className="w-5 h-5 text-emerald-700 shrink-0" />
                     <div>
-                      <div className="text-sm font-bold text-emerald-300">
-                        MATCHING AUTHENTICATED RELEASE
+                      <div className="font-bold text-emerald-900">
+                        Integrity match
                       </div>
-                      <div className="text-xs text-gray-300">
-                        Calculated SHA-256 matches the reference manifest. Detached Ed25519 signature verified successfully against publisher key.
+                      <div className="text-emerald-800">
+                        Calculated SHA-256 matches reference manifest. Publisher Ed25519 signature verified successfully.
                       </div>
                     </div>
                   </div>
 
-                  {/* Hash & Signature Inspection Grid */}
-                  <div className="grid md:grid-cols-2 gap-4 text-xs font-mono">
-                    <div className="p-3.5 rounded-xl bg-gray-950 border border-gray-800 space-y-2">
-                      <div className="text-gray-400 font-sans font-medium">Computed Whole-File SHA-256:</div>
-                      <div className="text-emerald-300 break-all text-[11px]">
+                  {/* Hash Inspection Grid */}
+                  <div className="grid md:grid-cols-2 gap-3 text-xs font-mono">
+                    <div className="p-3 rounded bg-neutral-50 border border-neutral-200 space-y-1">
+                      <div className="text-neutral-500 font-sans">Computed file SHA-256:</div>
+                      <div className="text-neutral-900 break-all text-[11px]">
                         {step1Verdict.fileIntegrity.computedSha256}
                       </div>
-                      <div className="text-gray-500 font-sans text-[11px] pt-1 border-t border-gray-900">
-                        Processed locally in-browser via Web Crypto API.
+                      <div className="text-neutral-500 font-sans text-[10px]">
+                        Calculated in-browser via Web Crypto API.
                       </div>
                     </div>
 
-                    <div className="p-3.5 rounded-xl bg-gray-950 border border-gray-800 space-y-2">
-                      <div className="text-gray-400 font-sans font-medium">Expected Manifest Digest:</div>
-                      <div className="text-cyan-300 break-all text-[11px]">
+                    <div className="p-3 rounded bg-neutral-50 border border-neutral-200 space-y-1">
+                      <div className="text-neutral-500 font-sans">Expected manifest digest:</div>
+                      <div className="text-neutral-900 break-all text-[11px]">
                         {step1Verdict.fileIntegrity.expectedSha256}
                       </div>
-                      <div className="text-gray-500 font-sans text-[11px] pt-1 border-t border-gray-900">
-                        Signed by publisher: <span className="text-cyan-400">canonical-ubuntu</span>
+                      <div className="text-neutral-500 font-sans text-[10px]">
+                        Signed by publisher: canonical-ubuntu
                       </div>
                     </div>
                   </div>
 
                   {/* Piece Matrix */}
-                  <div className="p-4 rounded-xl bg-gray-950 border border-gray-800 space-y-3">
+                  <div className="p-3.5 rounded bg-neutral-50 border border-neutral-200 space-y-2">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-gray-300 flex items-center space-x-1.5">
-                        <Layers className="w-4 h-4 text-cyan-400" />
-                        <span>BitTorrent Piece Verification (Chunk Integrity)</span>
+                      <span className="font-semibold text-neutral-900">
+                        Piece checksum verification
                       </span>
-                      <span className="font-mono text-emerald-400 text-[11px]">
-                        7 of 7 pieces verified (100% matched)
+                      <span className="font-mono text-emerald-700 text-[11px]">
+                        7 of 7 pieces verified (100% match)
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-7 gap-2">
+                    <div className="grid grid-cols-7 gap-1.5">
                       {[0, 1, 2, 3, 4, 5, 6].map((idx) => (
                         <div
                           key={idx}
-                          className="p-2 rounded-lg bg-emerald-950/40 border border-emerald-800/80 text-center"
+                          className="p-1.5 rounded bg-emerald-50 border border-emerald-200 text-center"
                         >
-                          <div className="text-[10px] text-gray-400 font-mono">#{idx}</div>
-                          <Check className="w-3.5 h-3.5 text-emerald-400 mx-auto mt-0.5" />
+                          <div className="text-[10px] text-neutral-500 font-mono">#{idx}</div>
+                          <Check className="w-3.5 h-3.5 text-emerald-700 mx-auto mt-0.5" />
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {/* Essential Forensics Caveat */}
-                  <div className="p-3.5 rounded-xl bg-gray-950 border border-gray-800/80 text-xs text-gray-400 space-y-1">
-                    <div className="font-semibold text-gray-300 flex items-center space-x-1.5">
-                      <Info className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>Security Forensics Axiom:</span>
-                    </div>
+                  <div className="p-3 rounded bg-neutral-50 border border-neutral-200 text-xs text-neutral-600 flex items-start space-x-2">
+                    <Info className="w-4 h-4 text-neutral-500 shrink-0 mt-0.5" />
                     <p>
-                      A matching hash proves byte-level equivalence to the publisher reference. It does <strong>not</strong> scan the file for malicious behavior or prove the software is vulnerability-free.
+                      <strong>Integrity principle:</strong> A matching hash proves byte-level equivalence to the publisher reference. It does not mean the software is malware-free.
                     </p>
                   </div>
                 </div>
@@ -327,100 +301,91 @@ export function DemoWalkthrough() {
 
           {/* STEP 2: Detect Tampering */}
           {currentStep === 2 && (
-            <div className="rounded-2xl border border-gray-800 bg-gray-900/30 p-6 space-y-6 animate-in fade-in duration-300">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 pb-4">
-                <div className="space-y-1">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-950 text-amber-300 border border-amber-800">
-                    DEMO FIXTURE — 1-BYTE MODIFIED ARTIFACT
+            <div className="rounded-lg border border-neutral-200 bg-white p-5 space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 pb-3">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-mono uppercase text-neutral-500">
+                    Step 2 of 4: Detect tampering
                   </span>
-                  <h3 className="text-lg font-bold text-white flex items-center space-x-2">
-                    <ShieldAlert className="w-5 h-5 text-amber-400" />
-                    <span>Step 2: Detecting File Tampering & Bit-Rot</span>
+                  <h3 className="text-base font-bold text-neutral-900">
+                    Detecting altered bytes or bit-rot
                   </h3>
                 </div>
-                <span className="text-xs font-mono text-gray-400">
-                  Target: <span className="text-amber-300 font-semibold">ubuntu-24.04-desktop-amd64.iso</span> (Altered)
+                <span className="text-xs font-mono text-neutral-600">
+                  Target: <span className="text-neutral-900 font-semibold">ubuntu-24.04-desktop-amd64.iso (Altered)</span>
                 </span>
               </div>
 
               {step2Verdict && (
-                <div className="space-y-5">
-                  {/* Verdict Badge */}
-                  <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-800/80 flex items-center space-x-3">
-                    <AlertTriangle className="w-6 h-6 text-amber-400 shrink-0" />
+                <div className="space-y-4">
+                  {/* Verdict Banner */}
+                  <div className="p-4 rounded-lg bg-red-50 border border-red-200 flex items-center space-x-3 text-xs">
+                    <X className="w-5 h-5 text-red-700 shrink-0" />
                     <div>
-                      <div className="text-sm font-bold text-amber-300">
-                        HASH MISMATCH DETECTED
+                      <div className="font-bold text-red-900">
+                        Hash mismatch detected
                       </div>
-                      <div className="text-xs text-gray-300">
-                        The downloaded file bytes differ from the official signed manifest. Exactly 1 byte in Piece #0 was flipped.
+                      <div className="text-red-800">
+                        Downloaded file bytes differ from official signed manifest. Exactly 1 byte in Piece #0 was modified.
                       </div>
                     </div>
                   </div>
 
-                  {/* Hash Comparison Diff */}
-                  <div className="grid md:grid-cols-2 gap-4 text-xs font-mono">
-                    <div className="p-3.5 rounded-xl bg-rose-950/20 border border-rose-900/60 space-y-2">
-                      <div className="text-rose-400 font-sans font-medium flex items-center justify-between">
-                        <span>Computed File SHA-256 (Tampered):</span>
-                        <XCircle className="w-3.5 h-3.5 text-rose-400" />
-                      </div>
-                      <div className="text-rose-300 break-all text-[11px]">
+                  {/* Hash Comparison */}
+                  <div className="grid md:grid-cols-2 gap-3 text-xs font-mono">
+                    <div className="p-3 rounded bg-neutral-50 border border-red-200 space-y-1">
+                      <div className="text-neutral-500 font-sans">Computed file SHA-256 (Tampered):</div>
+                      <div className="text-red-800 break-all text-[11px]">
                         {step2Verdict.fileIntegrity.computedSha256}
                       </div>
-                      <div className="text-rose-500 font-sans text-[11px] pt-1 border-t border-rose-950">
-                        Mismatch: Calculated from actual modified file bytes.
+                      <div className="text-red-700 font-sans text-[10px]">
+                        Mismatch: Calculated from modified file bytes.
                       </div>
                     </div>
 
-                    <div className="p-3.5 rounded-xl bg-gray-950 border border-gray-800 space-y-2">
-                      <div className="text-gray-400 font-sans font-medium">Expected Manifest Digest:</div>
-                      <div className="text-cyan-300 break-all text-[11px]">
+                    <div className="p-3 rounded bg-neutral-50 border border-neutral-200 space-y-1">
+                      <div className="text-neutral-500 font-sans">Expected manifest digest:</div>
+                      <div className="text-neutral-900 break-all text-[11px]">
                         {step2Verdict.fileIntegrity.expectedSha256}
                       </div>
-                      <div className="text-gray-500 font-sans text-[11px] pt-1 border-t border-gray-900">
+                      <div className="text-neutral-500 font-sans text-[10px]">
                         Authentic manifest signed by publisher.
                       </div>
                     </div>
                   </div>
 
-                  {/* Piece Matrix Showing Isolated Piece Failure */}
-                  <div className="p-4 rounded-xl bg-gray-950 border border-gray-800 space-y-3">
+                  {/* Piece Matrix */}
+                  <div className="p-3.5 rounded bg-neutral-50 border border-neutral-200 space-y-2">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-gray-300 flex items-center space-x-1.5">
-                        <Layers className="w-4 h-4 text-cyan-400" />
-                        <span>Piece Tamper Localization</span>
+                      <span className="font-semibold text-neutral-900">
+                        Piece tamper localization
                       </span>
-                      <span className="font-mono text-rose-400 text-[11px]">
+                      <span className="font-mono text-red-700 text-[11px]">
                         Piece #0 corrupted · 6 of 7 pieces matched
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-7 gap-2">
-                      <div className="p-2 rounded-lg bg-rose-950/60 border border-rose-800 text-center animate-pulse">
-                        <div className="text-[10px] text-rose-300 font-mono">#0 (CORRUPT)</div>
-                        <XCircle className="w-3.5 h-3.5 text-rose-400 mx-auto mt-0.5" />
+                    <div className="grid grid-cols-7 gap-1.5">
+                      <div className="p-1.5 rounded bg-red-50 border border-red-200 text-center">
+                        <div className="text-[10px] text-red-700 font-mono">#0 (Altered)</div>
+                        <X className="w-3.5 h-3.5 text-red-700 mx-auto mt-0.5" />
                       </div>
                       {[1, 2, 3, 4, 5, 6].map((idx) => (
                         <div
                           key={idx}
-                          className="p-2 rounded-lg bg-emerald-950/30 border border-emerald-800/60 text-center"
+                          className="p-1.5 rounded bg-emerald-50 border border-emerald-200 text-center"
                         >
-                          <div className="text-[10px] text-gray-400 font-mono">#{idx}</div>
-                          <Check className="w-3.5 h-3.5 text-emerald-400 mx-auto mt-0.5" />
+                          <div className="text-[10px] text-neutral-500 font-mono">#{idx}</div>
+                          <Check className="w-3.5 h-3.5 text-emerald-700 mx-auto mt-0.5" />
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {/* Honest Security Caveat */}
-                  <div className="p-3.5 rounded-xl bg-gray-950 border border-gray-800 text-xs text-gray-400 space-y-1">
-                    <div className="font-semibold text-amber-300 flex items-center space-x-1.5">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      <span>Forensic Interpretation:</span>
-                    </div>
+                  <div className="p-3 rounded bg-neutral-50 border border-neutral-200 text-xs text-neutral-600 flex items-start space-x-2">
+                    <Info className="w-4 h-4 text-neutral-500 shrink-0 mt-0.5" />
                     <p>
-                      A hash mismatch proves the file differs from the reference artifact (due to bit-rot, repackaging, or unauthorized alteration). It does <strong>not</strong> prove the file is malware or malicious.
+                      <strong>Forensic nuance:</strong> A hash mismatch indicates that the file content differs from reference. It does not definitively prove the file contains malware.
                     </p>
                   </div>
                 </div>
@@ -430,94 +395,67 @@ export function DemoWalkthrough() {
 
           {/* STEP 3: Explore Release DNA */}
           {currentStep === 3 && (
-            <div className="rounded-2xl border border-gray-800 bg-gray-900/30 p-6 space-y-6 animate-in fade-in duration-300">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 pb-4">
-                <div className="space-y-1">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-950 text-blue-300 border border-blue-800">
-                    DEMO DATA — NOT AN ON-CHAIN RECORD
+            <div className="rounded-lg border border-neutral-200 bg-white p-5 space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 pb-3">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-mono uppercase text-neutral-500">
+                    Step 3 of 4: Explore release history
                   </span>
-                  <h3 className="text-lg font-bold text-white flex items-center space-x-2">
-                    <GitCompare className="w-5 h-5 text-purple-400" />
-                    <span>Step 3: Release DNA & Same-Filename Variant Forensics</span>
+                  <h3 className="text-base font-bold text-neutral-900">
+                    Same-filename variant forensics
                   </h3>
                 </div>
-                <span className="text-xs text-gray-400">
-                  Cross-examining identical filenames from unverified trackers.
+                <span className="text-xs text-neutral-500">
+                  Distinguishing authentic binaries from repacks.
                 </span>
               </div>
 
               {step3Comparison && (
-                <div className="space-y-6">
-                  {/* Verdict Card */}
-                  <div className="p-4 rounded-xl bg-purple-950/30 border border-purple-800/80 flex items-center justify-between">
-                    <div>
-                      <div className="text-xs uppercase tracking-wider text-purple-400 font-mono font-semibold">
-                        Forensic Verdict
-                      </div>
-                      <div className="text-base font-bold text-white">
-                        {step3Comparison.verdictTitle}
-                      </div>
-                      <p className="text-xs text-gray-300 mt-1">
-                        {step3Comparison.explanation}
-                      </p>
+                <div className="space-y-4">
+                  <div className="p-4 rounded-lg bg-neutral-50 border border-neutral-200 space-y-1 text-xs">
+                    <div className="font-bold text-neutral-900">
+                      {step3Comparison.verdictTitle}
                     </div>
-                    <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-amber-950 text-amber-300 border border-amber-800">
-                      SAME NAME · DIFFERENT ORIGIN
-                    </span>
+                    <p className="text-neutral-600">
+                      {step3Comparison.explanation}
+                    </p>
                   </div>
 
-                  {/* Side-by-Side Comparison Grid */}
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {/* Variant A (Authentic) */}
-                    <div className="p-4 rounded-xl bg-gray-950 border border-emerald-900/60 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
-                          VARIANT A: AUTHENTIC VENDOR
+                  <div className="grid md:grid-cols-2 gap-3 text-xs">
+                    <div className="p-3.5 rounded bg-white border border-neutral-200 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-neutral-900">Variant A: Authentic vendor</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          Active
                         </span>
-                        <span className="text-[10px] text-gray-500 font-mono">DEMO RECORD</span>
                       </div>
-                      <div className="font-semibold text-sm text-white">
-                        {step3Comparison.artifactA.fileName}
-                      </div>
-                      <div className="space-y-1 text-xs font-mono text-gray-400">
-                        <div>Filename: <span className="text-white">{step3Comparison.artifactA.fileName}</span></div>
-                        <div>Publisher: <span className="text-cyan-300">{step3Comparison.artifactA.manifest?.publisherId ?? "unknown"}</span></div>
-                        <div>Status: <span className="text-emerald-400 font-semibold">{step3Comparison.diff.statusA}</span></div>
-                        <div className="truncate text-gray-500">SHA-256: {step3Comparison.artifactA.sha256}</div>
+                      <div className="space-y-1 font-mono text-[11px] text-neutral-600">
+                        <div>Filename: ubuntu-24.04-desktop-amd64.iso</div>
+                        <div>Publisher: canonical-ubuntu</div>
+                        <div className="truncate">SHA: {step3Comparison.artifactA.sha256}</div>
                       </div>
                     </div>
 
-                    {/* Variant B (Repack) */}
-                    <div className="p-4 rounded-xl bg-gray-950 border border-rose-900/60 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-950 text-rose-300 border border-rose-800">
-                          VARIANT B: UNVERIFIED TRACKER REPACK
+                    <div className="p-3.5 rounded bg-white border border-neutral-200 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-neutral-900">Variant B: Untrusted repack</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] bg-neutral-100 text-neutral-600 border border-neutral-200">
+                          Unregistered
                         </span>
-                        <span className="text-[10px] text-gray-500 font-mono">DEMO RECORD</span>
                       </div>
-                      <div className="font-semibold text-sm text-white">
-                        {step3Comparison.artifactB.fileName} (Unverified Tracker Repack)
-                      </div>
-                      <div className="space-y-1 text-xs font-mono text-gray-400">
-                        <div>Filename: <span className="text-white">{step3Comparison.artifactB.fileName}</span></div>
-                        <div>Publisher: <span className="text-rose-400">Unauthenticated Tracker</span></div>
-                        <div>Status: <span className="text-gray-400">{step3Comparison.diff.statusB}</span></div>
-                        <div className="truncate text-gray-500">SHA-256: {step3Comparison.artifactB.sha256}</div>
+                      <div className="space-y-1 font-mono text-[11px] text-neutral-600">
+                        <div>Filename: ubuntu-24.04-desktop-amd64.iso</div>
+                        <div>Publisher: Unauthenticated mirror</div>
+                        <div className="truncate">SHA: {step3Comparison.artifactB.sha256}</div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Sample Lineage Graph */}
                   {step3Comparison.lineageNodes.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="text-xs font-mono text-gray-400">
-                        Sample Release Lineage (Predecessor &rarr; Successor):
-                      </div>
-                      <LineageTimeline
-                        nodes={step3Comparison.lineageNodes}
-                        edges={step3Comparison.lineageEdges}
-                      />
-                    </div>
+                    <LineageTimeline
+                      nodes={step3Comparison.lineageNodes}
+                      edges={step3Comparison.lineageEdges}
+                    />
                   )}
                 </div>
               )}
@@ -526,89 +464,50 @@ export function DemoWalkthrough() {
 
           {/* STEP 4: Inspect Risk Evidence */}
           {currentStep === 4 && (
-            <div className="rounded-2xl border border-gray-800 bg-gray-900/30 p-6 space-y-6 animate-in fade-in duration-300">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 pb-4">
-                <div className="space-y-1">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
-                    DEMO EVIDENCE PANEL
+            <div className="rounded-lg border border-neutral-200 bg-white p-5 space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 pb-3">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-mono uppercase text-neutral-500">
+                    Step 4 of 4: Inspect risk report
                   </span>
-                  <h3 className="text-lg font-bold text-white flex items-center space-x-2">
-                    <Activity className="w-5 h-5 text-emerald-400" />
-                    <span>Step 4: Transparent Risk Intelligence & Scanner Policy</span>
+                  <h3 className="text-base font-bold text-neutral-900">
+                    Honest scanner policy &amp; multi-source evidence
                   </h3>
                 </div>
-                <span className="text-xs text-gray-400">
-                  Separating publisher provenance from active security inspection.
+                <span className="text-xs text-neutral-500">
+                  Separating publisher identity from malware inspection.
                 </span>
               </div>
 
               {step4Report && (
-                <div className="space-y-5">
-                  {/* Summary Metric Cards */}
-                  <div className="grid sm:grid-cols-3 gap-4 text-xs font-mono">
-                    <div className="p-4 rounded-xl bg-gray-950 border border-gray-800 space-y-1">
-                      <div className="text-gray-400 font-sans">Provenance Confidence:</div>
-                      <div className="text-lg font-bold text-emerald-400">AUTHENTIC</div>
-                      <div className="text-[11px] text-gray-500 font-sans">
-                        Valid Ed25519 signature from authorized key.
-                      </div>
+                <div className="space-y-4">
+                  <div className="grid sm:grid-cols-3 gap-3 text-xs">
+                    <div className="p-3 rounded bg-neutral-50 border border-neutral-200 space-y-1">
+                      <div className="text-neutral-500">Provenance confidence:</div>
+                      <div className="text-sm font-bold text-emerald-700">100% AUTHENTIC</div>
+                      <div className="text-[10px] text-neutral-500">Valid Ed25519 signature.</div>
                     </div>
 
-                    <div className="p-4 rounded-xl bg-gray-950 border border-gray-800 space-y-1">
-                      <div className="text-gray-400 font-sans">Integrity Verification:</div>
-                      <div className="text-lg font-bold text-emerald-400">100% MATCHED</div>
-                      <div className="text-[11px] text-gray-500 font-sans">
-                        Full-file SHA-256 + 7 chunk hashes matched.
-                      </div>
+                    <div className="p-3 rounded bg-neutral-50 border border-neutral-200 space-y-1">
+                      <div className="text-neutral-500">Integrity check:</div>
+                      <div className="text-sm font-bold text-emerald-700">EXACT MATCH</div>
+                      <div className="text-[10px] text-neutral-500">SHA-256 + 7 pieces matched.</div>
                     </div>
 
-                    <div className="p-4 rounded-xl bg-gray-950 border border-amber-900/50 space-y-1">
-                      <div className="text-gray-400 font-sans">Malware Inspection:</div>
-                      <div className="text-lg font-bold text-amber-400">SCANNER UNAVAILABLE</div>
-                      <div className="text-[11px] text-gray-500 font-sans">
-                        No external scanner configured. Never fakes 0-detection.
-                      </div>
+                    <div className="p-3 rounded bg-neutral-50 border border-neutral-200 space-y-1">
+                      <div className="text-neutral-500">Malware scan:</div>
+                      <div className="text-sm font-bold text-neutral-700">UNAVAILABLE</div>
+                      <div className="text-[10px] text-neutral-500">No scanner configured. Never fakes clean.</div>
                     </div>
                   </div>
 
-                  {/* Transparent Findings Table */}
-                  <div className="rounded-xl border border-gray-800 bg-gray-950 overflow-hidden">
-                    <div className="p-3 border-b border-gray-800 text-xs font-semibold text-gray-300">
-                      Evidence Findings Breakdown
-                    </div>
-                    <div className="divide-y divide-gray-800 text-xs">
-                      {step4Report.findings.map((finding) => (
-                        <div key={finding.id} className="p-3.5 flex items-start space-x-3">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold mt-0.5 ${
-                              finding.status === "POSITIVE"
-                                ? "bg-emerald-950 text-emerald-300 border border-emerald-800"
-                                : finding.status === "FLAGGED"
-                                ? "bg-rose-950 text-rose-300 border border-rose-800"
-                                : finding.status === "UNAVAILABLE" || finding.status === "NOT_SCANNED"
-                                ? "bg-amber-950 text-amber-300 border border-amber-800"
-                                : "bg-cyan-950 text-cyan-300 border border-cyan-800"
-                            }`}
-                          >
-                            {finding.status}
-                          </span>
-                          <div className="space-y-0.5">
-                            <div className="font-semibold text-white">{finding.title}</div>
-                            <div className="text-gray-400 text-[11px]">{finding.description}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Policy Statement */}
-                  <div className="p-3.5 rounded-xl bg-gray-950 border border-gray-800 text-xs text-gray-400 space-y-1">
-                    <div className="font-semibold text-emerald-400 flex items-center space-x-1.5">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>Penguin Trace Honesty Guarantee:</span>
+                  <div className="p-4 rounded-lg bg-neutral-50 border border-neutral-200 text-xs text-neutral-600 space-y-1">
+                    <div className="font-semibold text-neutral-900 flex items-center space-x-1.5">
+                      <ShieldCheck className="w-4 h-4 text-neutral-500" />
+                      <span>Penguin Trace honesty guarantee</span>
                     </div>
                     <p>
-                      We strictly separate publisher provenance from malware risk. A valid signature tells you <em>who authored the release</em>. We never present a file as &quot;safe&quot; without active scanner results.
+                      We never display 0 detections as a clean bill of health when no scanner ran. Provenance tells you <em>who signed the bytes</em>, not whether runtime execution is safe.
                     </p>
                   </div>
                 </div>
@@ -616,33 +515,32 @@ export function DemoWalkthrough() {
             </div>
           )}
 
-          {/* Stepper Navigation Footer */}
-          <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-gray-800">
+          {/* Navigation Footer */}
+          <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-neutral-200">
             <button
               type="button"
               disabled={currentStep === 1}
               onClick={() => setCurrentStep((prev) => Math.max(1, prev - 1))}
-              className="px-4 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed border border-gray-700 text-gray-200 text-xs font-medium flex items-center space-x-2 transition-colors"
+              className="px-3.5 py-2 rounded-md bg-white hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed border border-neutral-300 text-neutral-800 text-xs font-medium flex items-center space-x-1.5"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Back</span>
             </button>
 
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2">
               <button
                 type="button"
                 onClick={() => router.push("/")}
-                className="px-4 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-700 text-gray-300 text-xs font-medium flex items-center space-x-1.5 transition-colors"
+                className="px-3.5 py-2 rounded-md bg-white hover:bg-neutral-50 border border-neutral-300 text-neutral-700 text-xs font-medium"
               >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Exit Demo</span>
+                Exit demo
               </button>
 
               {currentStep < 4 ? (
                 <button
                   type="button"
                   onClick={() => setCurrentStep((prev) => Math.min(4, prev + 1))}
-                  className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold flex items-center space-x-2 transition-colors shadow-md shadow-cyan-950"
+                  className="px-4 py-2 rounded-md bg-black text-white hover:bg-neutral-800 text-xs font-medium flex items-center space-x-1.5"
                 >
                   <span>Next: Step {currentStep + 1}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -651,10 +549,10 @@ export function DemoWalkthrough() {
                 <button
                   type="button"
                   onClick={() => router.push("/verify")}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center space-x-2 transition-colors shadow-md shadow-emerald-950"
+                  className="px-4 py-2 rounded-md bg-black text-white hover:bg-neutral-800 text-xs font-medium flex items-center space-x-1.5"
                 >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Try Live Verifier</span>
+                  <span>Open live verifier</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>

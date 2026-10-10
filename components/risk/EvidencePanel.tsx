@@ -2,21 +2,14 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  Activity,
   ShieldCheck,
-  ShieldAlert,
   AlertTriangle,
-  CheckCircle2,
-  XCircle,
-  HelpCircle,
-  Clock,
-  Sliders,
+  Check,
+  X,
   Info,
   Upload,
   Search,
-  RefreshCw,
-  Database,
-  FileCode,
+  ExternalLink,
 } from "lucide-react";
 import {
   aggregateRiskIntelligence,
@@ -38,7 +31,7 @@ import type {
 } from "@/lib/verification/types";
 
 export function EvidencePanel() {
-  const [mode, setMode] = useState<"real" | "demo">("real");
+  const [mode, setMode] = useState<"demo" | "live">("demo");
   const [fixtures, setFixtures] = useState<DemoFixtureItem[]>([]);
   const [selectedFixtureId, setSelectedFixtureId] = useState<string>("fixture-authentic-ubuntu");
   const [simulateScannerThreat, setSimulateScannerThreat] = useState<boolean>(false);
@@ -99,7 +92,6 @@ export function EvidencePanel() {
       message: "Valid Ed25519 signature verified",
     };
 
-    // External findings for threat simulation
     const externalFindings: EvidenceFinding[] = [];
     if (threatSimulated) {
       externalFindings.push({
@@ -165,7 +157,6 @@ export function EvidencePanel() {
         }
       }
 
-      // 1. File Integrity
       const isHashMatch = parsedManifest ? fileSha256 === parsedManifest.sha256.toLowerCase() : true;
       const fileIntegrity: FileIntegrityResult = {
         status: isHashMatch ? "MATCH" : "MISMATCH",
@@ -175,10 +166,9 @@ export function EvidencePanel() {
         expectedSha256: parsedManifest?.sha256,
         message: isHashMatch
           ? "SHA-256 computed locally via Web Crypto API matches reference."
-          : `SHA-256 digest mismatch (${fileSha256.slice(0, 10)}... != ${parsedManifest?.sha256.slice(0, 10)}...).`,
+          : `SHA-256 digest mismatch.`,
       };
 
-      // 2. Signature verification if manifest and key provided
       let signatureVerification: SignatureVerificationResult;
       if (parsedManifest && customPubKeyHex.trim()) {
         signatureVerification = await verifyManifestSignature(
@@ -198,7 +188,6 @@ export function EvidencePanel() {
         };
       }
 
-      // 3. Query on-chain release record
       let onChainRecord = null;
       try {
         if (fileSha256) {
@@ -225,160 +214,68 @@ export function EvidencePanel() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Mode Selector Tabs */}
-      <div className="flex border-b border-gray-800 space-x-2">
-        <button
-          type="button"
-          onClick={() => setMode("real")}
-          className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors flex items-center space-x-2 ${
-            mode === "real"
-              ? "bg-gray-900 text-emerald-400 border-t border-x border-gray-800"
-              : "text-gray-400 hover:text-gray-200"
-          }`}
-        >
-          <Activity className="w-4 h-4" />
-          <span>Evaluate Live Artifact Evidence</span>
-        </button>
-
+      <div className="flex border-b border-neutral-200 space-x-2">
         <button
           type="button"
           onClick={() => {
             setMode("demo");
             evaluateFixture("fixture-authentic-ubuntu");
           }}
-          className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors flex items-center space-x-2 ${
+          className={`px-4 py-2 text-xs font-semibold rounded-t-md transition-colors ${
             mode === "demo"
-              ? "bg-gray-900 text-emerald-400 border-t border-x border-gray-800"
-              : "text-gray-400 hover:text-gray-200"
+              ? "bg-white text-neutral-900 border-t border-x border-neutral-200"
+              : "text-neutral-500 hover:text-neutral-900"
           }`}
         >
-          <Database className="w-4 h-4" />
-          <span>Demo Fixtures & Threat Simulation</span>
+          Sample fixtures &amp; threat simulations
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMode("live")}
+          className={`px-4 py-2 text-xs font-semibold rounded-t-md transition-colors ${
+            mode === "live"
+              ? "bg-white text-neutral-900 border-t border-x border-neutral-200"
+              : "text-neutral-500 hover:text-neutral-900"
+          }`}
+        >
+          Evaluate downloaded file
         </button>
       </div>
 
-      {/* Mode 1: Live Artifact Evaluation */}
-      {mode === "real" && (
-        <form onSubmit={handleEvaluateCustomArtifact} className="rounded-2xl border border-gray-800 bg-gray-900/30 p-6 space-y-4">
-          <div className="space-y-1">
-            <h4 className="text-sm font-semibold text-white flex items-center space-x-2">
-              <Search className="w-4 h-4 text-emerald-400" />
-              <span>Inspect Real Evidence for Downloaded Artifact</span>
-            </h4>
-            <p className="text-xs text-gray-400">
-              Select a downloaded file or paste a signed release manifest to synthesize verified
-              cryptographic integrity, Monad on-chain commitments, and scanner status.
-            </p>
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-xs text-gray-400 font-medium">Target Local File:</label>
-              <input
-                type="file"
-                onChange={(e) => setCustomFile(e.target.files?.[0] || null)}
-                className="w-full text-xs text-gray-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-gray-800 file:text-gray-200 hover:file:bg-gray-700 cursor-pointer"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs text-gray-400 font-medium">
-                Publisher Public Key (Hex, optional):
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. 8580e9bff5..."
-                value={customPubKeyHex}
-                onChange={(e) => setCustomPubKeyHex(e.target.value)}
-                className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-1.5 text-xs text-white font-mono focus:border-emerald-500 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs text-gray-400 font-medium">
-              Signed Release Manifest JSON (Optional):
-            </label>
-            <textarea
-              rows={3}
-              placeholder="Paste signed manifest JSON if available..."
-              value={customManifestText}
-              onChange={(e) => setCustomManifestText(e.target.value)}
-              className="w-full rounded-lg bg-gray-950 border border-gray-800 p-2 text-[11px] text-gray-300 font-mono focus:border-emerald-500 focus:outline-none resize-none"
-            />
-          </div>
-
-          <div className="flex justify-start">
-            <button
-              type="submit"
-              disabled={isEvaluatingCustom}
-              className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition-all shadow-md shadow-emerald-950 flex items-center space-x-2 disabled:cursor-not-allowed"
-            >
-              {isEvaluatingCustom ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Synthesizing evidence...</span>
-                </>
-              ) : (
-                <>
-                  <Activity className="w-3.5 h-3.5" />
-                  <span>Synthesize Live Risk Intelligence</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          {customError && (
-            <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-800/80 text-rose-300 text-xs flex items-center space-x-2">
-              <ShieldAlert className="w-4 h-4 shrink-0" />
-              <span>{customError}</span>
-            </div>
-          )}
-        </form>
-      )}
-
-      {/* Mode 2: Demo Fixtures & Simulations */}
+      {/* Demo Selector */}
       {mode === "demo" && (
-        <div className="rounded-xl border border-emerald-900/60 bg-emerald-950/20 p-4 space-y-4">
+        <div className="p-3.5 rounded-lg border border-neutral-200 bg-neutral-50 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center space-x-2">
-              <span className="inline-flex items-center rounded bg-emerald-900/60 px-2 py-0.5 text-[11px] font-medium text-emerald-300 border border-emerald-700/50 font-mono">
-                DEMO DATA FIXTURES
-              </span>
-              <span className="text-xs text-gray-400">
-                Select pre-built release artifact to evaluate multi-source risk evidence:
-              </span>
-            </div>
-
-            {/* Scanner Threat Simulation Toggle */}
-            <div className="flex items-center space-x-2 text-xs">
-              <Sliders className="w-3.5 h-3.5 text-emerald-400" />
-              <label className="text-gray-300 cursor-pointer flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={simulateScannerThreat}
-                  onChange={(e) => {
-                    setSimulateScannerThreat(e.target.checked);
-                    evaluateFixture(selectedFixtureId, fixtures, e.target.checked);
-                  }}
-                  className="rounded bg-gray-900 border-gray-700 text-emerald-500 focus:ring-emerald-600"
-                />
-                <span>Simulate External Scanner Threat Detection (Demo)</span>
-              </label>
-            </div>
+            <span className="text-xs font-semibold text-neutral-900">
+              Select sample artifact:
+            </span>
+            <label className="text-xs text-neutral-600 flex items-center space-x-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={simulateScannerThreat}
+                onChange={(e) => {
+                  setSimulateScannerThreat(e.target.checked);
+                  evaluateFixture(selectedFixtureId, fixtures, e.target.checked);
+                }}
+                className="rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900"
+              />
+              <span>Simulate external scanner alert</span>
+            </label>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {fixtures.map((f) => (
               <button
                 key={f.id}
                 type="button"
                 onClick={() => evaluateFixture(f.id, fixtures, simulateScannerThreat)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                className={`px-2.5 py-1 rounded text-xs transition-colors ${
                   selectedFixtureId === f.id
-                    ? "bg-emerald-600 text-white shadow-lg shadow-emerald-950"
-                    : "bg-gray-900 text-gray-300 hover:bg-gray-800 border border-gray-800"
+                    ? "bg-black text-white font-medium"
+                    : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-100"
                 }`}
               >
                 {f.name}
@@ -388,89 +285,113 @@ export function EvidencePanel() {
         </div>
       )}
 
-      {/* Prominent Evidence & Malware Policy Notice */}
-      <div className="rounded-xl border border-gray-800 bg-gray-950/70 p-4 space-y-2">
-        <div className="text-xs font-semibold text-gray-300 flex items-center space-x-2">
-          <Info className="w-4 h-4 text-cyan-400 shrink-0" />
-          <span>Core Security Axiom: Provenance Confidence vs. Malware Status</span>
-        </div>
-        <p className="text-xs text-gray-400 leading-relaxed">
-          The <span className="text-emerald-400 font-semibold">Provenance Score (0–100%)</span> measures
-          verified cryptographic authorship (Ed25519) and Monad on-chain commitment status only.{" "}
-          <strong className="text-gray-200">
-            It does NOT imply that a file is malware-free.
-          </strong>{" "}
-          An authentic binary signed by a legitimate publisher can still contain zero-day vulnerabilities,
-          backdoors, or malicious logic if the publisher build pipeline was compromised.
-          If no external malware scanner was executed, scanner status is explicitly displayed as{" "}
-          <span className="font-mono text-cyan-400">UNAVAILABLE</span> and is never faked as clean.
-        </p>
-      </div>
+      {/* Live Form */}
+      {mode === "live" && (
+        <form onSubmit={handleEvaluateCustomArtifact} className="rounded-lg border border-neutral-200 bg-white p-5 space-y-4">
+          <div className="space-y-1">
+            <h4 className="text-xs font-semibold text-neutral-900 uppercase tracking-wider">
+              Inspect evidence for downloaded artifact
+            </h4>
+            <p className="text-xs text-neutral-500">
+              Upload a file or paste a signed release manifest to synthesize verified cryptographic integrity and on-chain commitments.
+            </p>
+          </div>
 
+          <div className="grid sm:grid-cols-2 gap-4 text-xs">
+            <div>
+              <label className="text-neutral-600 block mb-1">Target file:</label>
+              <input
+                type="file"
+                onChange={(e) => setCustomFile(e.target.files?.[0] || null)}
+                className="w-full text-xs text-neutral-600 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border file:border-neutral-300 file:text-xs file:bg-white file:text-neutral-900 hover:file:bg-neutral-50 cursor-pointer"
+              />
+            </div>
+
+            <div>
+              <label className="text-neutral-600 block mb-1">Publisher Ed25519 public key (hex):</label>
+              <input
+                type="text"
+                placeholder="e.g. 8580e9bff5..."
+                value={customPubKeyHex}
+                onChange={(e) => setCustomPubKeyHex(e.target.value)}
+                className="w-full rounded bg-white border border-neutral-200 px-3 py-1.5 font-mono text-xs text-neutral-900 focus:outline-none focus:border-neutral-900"
+              />
+            </div>
+          </div>
+
+          <div className="text-xs">
+            <label className="text-neutral-600 block mb-1">Signed release manifest JSON (Optional):</label>
+            <textarea
+              rows={3}
+              placeholder="Paste manifest JSON..."
+              value={customManifestText}
+              onChange={(e) => setCustomManifestText(e.target.value)}
+              className="w-full rounded bg-white border border-neutral-200 p-2 font-mono text-[11px] text-neutral-900 focus:outline-none focus:border-neutral-900 resize-none"
+            />
+          </div>
+
+          <div className="flex justify-start">
+            <button
+              type="submit"
+              disabled={isEvaluatingCustom}
+              className="px-5 py-2 rounded-md bg-black text-white hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 font-medium text-xs transition-colors"
+            >
+              <span>{isEvaluatingCustom ? "Evaluating..." : "Generate risk report"}</span>
+            </button>
+          </div>
+
+          {customError && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-900 text-xs flex items-center space-x-2">
+              <X className="w-4 h-4 text-red-700 shrink-0" />
+              <span>{customError}</span>
+            </div>
+          )}
+        </form>
+      )}
+
+      {/* Report Display */}
       {report && (
         <div className="space-y-6">
-          {/* Main Risk Intelligence Assessment Card */}
-          <div
-            className={`rounded-2xl border p-6 space-y-5 ${
-              report.assessment === "AUTHENTICITY_CONFIRMED_SECURITY_UNKNOWN"
-                ? "bg-emerald-950/20 border-emerald-800/60"
-                : report.assessment === "REVOKED_RELEASE"
-                ? "bg-rose-950/30 border-rose-800/80"
-                : report.assessment === "SUSPICIOUS_SECURITY_FINDING" ||
-                  report.assessment === "CONFLICTING_EVIDENCE"
-                ? "bg-amber-950/30 border-amber-800/80"
-                : "bg-gray-900/60 border-gray-800"
-            }`}
-          >
+          {/* Main Assessment Card */}
+          <div className="rounded-lg border border-neutral-200 bg-white p-5 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="space-y-1">
-                <span className="text-xs uppercase tracking-wider text-gray-400 font-semibold">
-                  Synthesized Risk Assessment
+                <span className="text-xs uppercase tracking-wider text-neutral-500 font-semibold font-mono">
+                  Synthesized risk assessment
                 </span>
-                <h3 className="text-xl font-bold text-white flex items-center space-x-2">
-                  <Activity className="w-5 h-5 text-emerald-400" />
-                  <span>{report.assessmentTitle}</span>
-                </h3>
+                <h3 className="text-base font-bold text-neutral-900">{report.assessmentTitle}</h3>
               </div>
 
-              {/* Provenance Confidence Score Meter */}
-              <div className="flex items-center space-x-3 bg-gray-950/80 px-4 py-2 rounded-xl border border-gray-800">
+              {/* Provenance meter */}
+              <div className="flex items-center space-x-3 bg-neutral-50 px-3 py-2 rounded border border-neutral-200">
                 <div className="text-right">
-                  <div className="text-[10px] text-gray-400 uppercase font-mono">
-                    Provenance Score
+                  <div className="text-[10px] text-neutral-500 uppercase font-mono">
+                    Provenance score
                   </div>
-                  <div className="text-lg font-mono font-bold text-white">
+                  <div className="text-sm font-mono font-bold text-neutral-900">
                     {report.provenanceScore}%
                   </div>
                 </div>
-                <div className="w-12 h-2 rounded-full bg-gray-800 overflow-hidden">
+                <div className="w-16 h-2 rounded bg-neutral-200 overflow-hidden">
                   <div
-                    className={`h-full ${
-                      report.provenanceScore >= 80
-                        ? "bg-emerald-400"
-                        : report.provenanceScore > 0
-                        ? "bg-amber-400"
-                        : "bg-rose-500"
-                    }`}
+                    className="h-full bg-neutral-900"
                     style={{ width: `${report.provenanceScore}%` }}
                   />
                 </div>
               </div>
             </div>
 
-            <p className="text-sm text-gray-300 leading-relaxed">{report.summary}</p>
+            <p className="text-xs text-neutral-700 leading-relaxed font-medium">
+              {report.summary}
+            </p>
 
-            {/* Explanation Steps */}
-            <div className="p-3.5 rounded-xl bg-gray-950/60 border border-gray-800/80 space-y-1.5">
-              <div className="text-xs font-semibold text-gray-300">
-                Assessment Reasoning & Provenance Steps:
-              </div>
-              <ul className="text-xs text-gray-400 space-y-1">
+            {/* Explanation steps */}
+            <div className="p-3 rounded bg-neutral-50 border border-neutral-200 space-y-1.5 text-xs">
+              <div className="font-semibold text-neutral-900">Assessment breakdown:</div>
+              <ul className="space-y-1 text-neutral-600">
                 {report.explanationSteps.map((step, idx) => (
                   <li key={idx} className="flex items-start space-x-2">
-                    <span className="text-emerald-500 shrink-0 font-mono">
-                      {idx + 1}.
-                    </span>
+                    <span className="text-neutral-400 font-mono shrink-0">{idx + 1}.</span>
                     <span>{step}</span>
                   </li>
                 ))}
@@ -480,53 +401,47 @@ export function EvidencePanel() {
 
           {/* Evidence Sources List */}
           <div className="space-y-3">
-            <h4 className="text-sm font-semibold text-gray-200">
-              Evidence Sources & Real-Time Status
+            <h4 className="text-xs font-semibold text-neutral-900 uppercase tracking-wider">
+              Evidence sources &amp; findings
             </h4>
 
-            <div className="grid gap-3">
+            <div className="rounded-lg border border-neutral-200 bg-white overflow-hidden divide-y divide-neutral-100">
               {report.findings.map((f) => {
                 const isPositive = f.status === "POSITIVE";
                 const isFlagged = f.status === "FLAGGED";
-                const isUnavailable = f.status === "UNAVAILABLE" || f.status === "NOT_SCANNED";
 
                 return (
                   <div
                     key={f.id}
-                    className="p-4 rounded-xl bg-gray-900/40 border border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
                   >
                     <div className="space-y-1">
                       <div className="flex items-center space-x-2">
-                        <span className="font-semibold text-xs text-white">
-                          {f.title}
-                        </span>
-                        <span className="text-[10px] text-gray-500 font-mono">
+                        <span className="font-semibold text-neutral-900">{f.title}</span>
+                        <span className="text-[10px] text-neutral-500 font-mono">
                           [{f.sourceType}]
                         </span>
                         {f.demoOnly && (
-                          <span className="text-[9px] bg-purple-950 text-purple-300 border border-purple-800 px-1.5 py-0.2 rounded font-mono">
-                            SIMULATED FINDING (DEMO)
+                          <span className="text-[10px] bg-neutral-100 text-neutral-600 px-1.5 py-0.2 rounded border border-neutral-200 font-mono">
+                            Simulated
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-gray-400">{f.description}</p>
+                      <p className="text-neutral-600">{f.description}</p>
                     </div>
 
                     <div className="shrink-0 flex items-center space-x-2">
                       <span
-                        className={`px-2.5 py-1 rounded-md text-xs font-mono font-semibold flex items-center space-x-1.5 ${
+                        className={`px-2.5 py-1 rounded text-xs font-mono font-medium flex items-center space-x-1.5 border ${
                           isPositive
-                            ? "bg-emerald-950/80 text-emerald-300 border border-emerald-800"
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
                             : isFlagged
-                            ? "bg-rose-950/80 text-rose-300 border border-rose-800"
-                            : isUnavailable
-                            ? "bg-gray-800/80 text-gray-400 border border-gray-700"
-                            : "bg-blue-950/80 text-blue-300 border border-blue-800"
+                            ? "bg-red-50 text-red-800 border-red-200"
+                            : "bg-neutral-100 text-neutral-700 border-neutral-200"
                         }`}
                       >
-                        {isPositive && <CheckCircle2 className="w-3.5 h-3.5" />}
-                        {isFlagged && <XCircle className="w-3.5 h-3.5" />}
-                        {isUnavailable && <HelpCircle className="w-3.5 h-3.5" />}
+                        {isPositive && <Check className="w-3.5 h-3.5" />}
+                        {isFlagged && <X className="w-3.5 h-3.5" />}
                         <span>{f.status}</span>
                       </span>
                     </div>
@@ -534,6 +449,17 @@ export function EvidencePanel() {
                 );
               })}
             </div>
+          </div>
+
+          {/* Honest scanner disclosure */}
+          <div className="p-4 rounded-lg border border-neutral-200 bg-neutral-50 text-xs text-neutral-600 space-y-1">
+            <div className="font-semibold text-neutral-900 flex items-center space-x-1.5">
+              <Info className="w-4 h-4 text-neutral-500" />
+              <span>Core security axiom</span>
+            </div>
+            <p>
+              A valid digital signature verifies who authored the release. It does not prove the software is free from zero-day vulnerabilities, runtime backdoors, or malicious build pipeline tampering.
+            </p>
           </div>
         </div>
       )}

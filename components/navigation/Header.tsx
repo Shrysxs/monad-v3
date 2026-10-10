@@ -8,41 +8,40 @@ export function Header() {
   const pathname = usePathname();
 
   const navItems = [
-    { href: "/verify", label: "Live Integrity", icon: Shield },
-    { href: "/dna", label: "Release DNA", icon: GitCompare },
-    { href: "/risk", label: "Risk Intelligence", icon: Activity },
-    { href: "/publisher", label: "Publisher Portal", icon: KeyRound },
+    { href: "/", label: "Home" },
+    { href: "/verify", label: "Verify a file" },
+    { href: "/dna", label: "Release history" },
+    { href: "/risk", label: "Risk report" },
+    { href: "/publisher", label: "Publisher" },
   ];
 
   return (
-    <header className="border-b border-gray-800 bg-gray-950/80 backdrop-blur sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        <div className="flex items-center space-x-8">
-          <Link href="/" className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-lg bg-cyan-600/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold">
+    <header className="border-b border-neutral-200 bg-white sticky top-0 z-50">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+        <div className="flex items-center space-x-6">
+          <Link href="/" className="flex items-center space-x-2.5">
+            <div className="w-7 h-7 rounded bg-neutral-900 text-white flex items-center justify-center font-bold text-xs tracking-wider">
               PT
             </div>
-            <span className="font-semibold text-lg tracking-tight text-white">
-              Penguin<span className="text-cyan-400"> Trace</span>
+            <span className="font-bold text-base tracking-tight text-neutral-900">
+              Penguin Trace
             </span>
           </Link>
 
-          <nav className="hidden md:flex space-x-1">
+          <nav className="hidden md:flex items-center space-x-1">
             {navItems.map((item) => {
-              const Icon = item.icon;
               const isActive = pathname === item.href;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  className={`px-3 py-1.5 rounded-md text-xs transition-colors ${
                     isActive
-                      ? "bg-cyan-950/50 text-cyan-300 border border-cyan-800/50"
-                      : "text-gray-400 hover:text-gray-200 hover:bg-gray-900"
+                      ? "bg-neutral-100 text-neutral-900 font-semibold"
+                      : "text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 font-normal"
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
-                  <span>{item.label}</span>
+                  {item.label}
                 </Link>
               );
             })}
@@ -52,28 +51,23 @@ export function Header() {
         <div className="flex items-center space-x-3">
           <Link
             href="/demo"
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
               pathname === "/demo"
-                ? "bg-cyan-500 text-gray-950 shadow-md shadow-cyan-950"
-                : "bg-cyan-950/70 hover:bg-cyan-900/80 text-cyan-300 border border-cyan-700/80"
+                ? "bg-neutral-900 text-white border-neutral-900"
+                : "bg-white text-neutral-800 border-neutral-300 hover:bg-neutral-50"
             }`}
           >
-            <PlayCircle className="w-3.5 h-3.5" />
-            <span>Try Demo</span>
+            Try Demo
           </Link>
 
-          <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-full bg-purple-950/40 border border-purple-800/50 text-xs text-purple-300">
-            <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
-            <span>Monad Testnet (10143)</span>
-          </div>
-
           <a
-            href="https://testnet.monadscan.com"
+            href="https://testnet.monadscan.com/address/0xeB3Ef45368cf0A28679FC6F037295fC2607deF01"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center space-x-1 text-xs text-gray-400 hover:text-gray-200"
+            className="hidden sm:flex items-center space-x-1 text-xs text-neutral-500 hover:text-neutral-900"
+            title="Monad Testnet Registry Explorer"
           >
-            <span>Explorer</span>
+            <span>Monad (10143)</span>
             <ExternalLink className="w-3 h-3" />
           </a>
         </div>

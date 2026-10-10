@@ -1,179 +1,155 @@
 import Link from "next/link";
-import { Shield, GitCompare, Activity, KeyRound, CheckCircle2, AlertTriangle, ArrowRight } from "lucide-react";
+import { Shield, KeyRound, Activity, ArrowRight, ExternalLink, Copy } from "lucide-react";
 
 export default function HomePage() {
+  const registryAddress = "0xeB3Ef45368cf0A28679FC6F037295fC2607deF01";
+
   return (
-    <div className="space-y-12 py-4">
+    <div className="space-y-16 py-6 max-w-4xl mx-auto">
       {/* Hero Section */}
-      <div className="space-y-4 max-w-3xl">
-        <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-cyan-950/60 border border-cyan-800/60 text-xs text-cyan-300">
-          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-          <span>Monad Testnet Release Registry</span>
+      <div className="space-y-6">
+        <div className="inline-flex items-center space-x-2 text-xs font-mono font-medium text-neutral-500 uppercase tracking-wider">
+          <span>Penguin Trace</span>
+          <span>·</span>
+          <span>Release Integrity Layer</span>
         </div>
-        <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-white">
-          Know whether a downloaded file matches an authentic release.
+
+        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-neutral-900 leading-[1.15]">
+          Know whether a software release is authentic.
         </h1>
-        <p className="text-lg text-gray-400 leading-relaxed">
-          Penguin Trace combines local cryptographic file and piece hashing, cross-variant release forensics,
-          and explainable security evidence — backed by an auditable publisher release registry on Monad.
+
+        <p className="text-lg text-neutral-600 leading-relaxed max-w-2xl">
+          Verify file integrity, check publisher signatures, and inspect release history before trusting a download.
         </p>
 
-        {/* Hero CTAs */}
         <div className="flex flex-wrap items-center gap-3 pt-2">
           <Link
-            href="/demo"
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-sm flex items-center space-x-2 shadow-lg shadow-cyan-950/60 transition-all"
+            href="/verify"
+            className="px-5 py-2.5 rounded-md bg-neutral-900 hover:bg-neutral-800 text-white font-medium text-sm transition-colors inline-flex items-center space-x-2 shadow-sm"
           >
-            <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-            <span>Try Demo (Guided 3-Min Tour)</span>
+            <span>Verify a file</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
+
           <Link
-            href="/verify"
-            className="px-4 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-700 text-gray-200 font-medium text-sm flex items-center space-x-2 transition-colors"
+            href="/demo"
+            className="px-5 py-2.5 rounded-md bg-white hover:bg-neutral-50 border border-neutral-300 text-neutral-900 font-medium text-sm transition-colors"
           >
-            <Shield className="w-4 h-4 text-cyan-400" />
-            <span>Open Live Verifier</span>
+            Try interactive demo
           </Link>
         </div>
       </div>
 
-      {/* Honesty Guarantees Banner */}
-      <div className="p-4 rounded-xl bg-gray-900/60 border border-gray-800 text-sm space-y-2">
-        <div className="font-semibold text-gray-300 flex items-center space-x-2">
-          <AlertTriangle className="w-4 h-4 text-amber-400" />
-          <span>Core Security & Honesty Guarantees</span>
+      {/* Three Simple Sections */}
+      <div className="grid sm:grid-cols-3 gap-6 pt-4 border-t border-neutral-200">
+        <div className="space-y-2.5 p-5 rounded-lg border border-neutral-200 bg-white">
+          <div className="w-8 h-8 rounded border border-neutral-200 flex items-center justify-center text-neutral-900">
+            <Shield className="w-4 h-4" />
+          </div>
+          <h2 className="text-base font-semibold text-neutral-900">
+            Verify integrity
+          </h2>
+          <p className="text-xs text-neutral-600 leading-relaxed">
+            Check whether your file&apos;s contents match a trusted reference.
+          </p>
+          <div className="pt-2">
+            <Link
+              href="/verify"
+              className="text-xs font-medium text-neutral-900 hover:underline inline-flex items-center space-x-1"
+            >
+              <span>Verify file</span>
+              <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
         </div>
-        <ul className="grid sm:grid-cols-3 gap-3 text-xs text-gray-400">
-          <li className="flex items-start space-x-2">
-            <span className="text-cyan-400">•</span>
-            <span>Files are processed locally. Contents are never uploaded to our servers.</span>
-          </li>
-          <li className="flex items-start space-x-2">
-            <span className="text-cyan-400">•</span>
-            <span>A matching hash proves identity, not that a file is malware-free.</span>
-          </li>
-          <li className="flex items-start space-x-2">
-            <span className="text-cyan-400">•</span>
-            <span>A hash mismatch proves byte difference, never automatic malicious intent.</span>
-          </li>
-        </ul>
+
+        <div className="space-y-2.5 p-5 rounded-lg border border-neutral-200 bg-white">
+          <div className="w-8 h-8 rounded border border-neutral-200 flex items-center justify-center text-neutral-900">
+            <KeyRound className="w-4 h-4" />
+          </div>
+          <h2 className="text-base font-semibold text-neutral-900">
+            Trace the publisher
+          </h2>
+          <p className="text-xs text-neutral-600 leading-relaxed">
+            Check the release signature and publisher identity.
+          </p>
+          <div className="pt-2">
+            <Link
+              href="/dna"
+              className="text-xs font-medium text-neutral-900 hover:underline inline-flex items-center space-x-1"
+            >
+              <span>Release history</span>
+              <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+        </div>
+
+        <div className="space-y-2.5 p-5 rounded-lg border border-neutral-200 bg-white">
+          <div className="w-8 h-8 rounded border border-neutral-200 flex items-center justify-center text-neutral-900">
+            <Activity className="w-4 h-4" />
+          </div>
+          <h2 className="text-base font-semibold text-neutral-900">
+            Inspect the evidence
+          </h2>
+          <p className="text-xs text-neutral-600 leading-relaxed">
+            See what is verified, what is missing, and what remains unknown.
+          </p>
+          <div className="pt-2">
+            <Link
+              href="/risk"
+              className="text-xs font-medium text-neutral-900 hover:underline inline-flex items-center space-x-1"
+            >
+              <span>Risk report</span>
+              <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+        </div>
       </div>
 
-      {/* Interactive Demo Mode Showcase Banner */}
-      <div className="p-6 rounded-2xl bg-gradient-to-r from-cyan-950/60 via-blue-950/40 to-purple-950/60 border border-cyan-800/60 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-        <div className="space-y-2 max-w-2xl">
-          <div className="flex items-center space-x-2">
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-cyan-900/80 text-cyan-300 border border-cyan-700">
-              GUIDED WALKTHROUGH
-            </span>
-            <span className="text-xs text-gray-400">Takes ~3 minutes · No wallet or gas needed</span>
-          </div>
-          <h2 className="text-xl font-bold text-white">
-            Experience Penguin Trace in action with preloaded cryptographic fixtures
-          </h2>
-          <p className="text-xs text-gray-300 leading-relaxed">
-            Step through authentic release verification, 1-byte piece tamper detection, same-filename variant forensics, and transparent scanner availability reporting — all running locally in your browser.
+      {/* How Monad fits in */}
+      <div className="p-6 rounded-lg border border-neutral-200 bg-neutral-50/50 space-y-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold text-neutral-900">
+            How Monad fits in
+          </h3>
+          <p className="text-xs text-neutral-600 leading-relaxed">
+            Monad is the blockchain used by Penguin Trace to publish and check release records. It provides a public, independently inspectable record of publisher authorization and release status. File hashing and signature verification happen separately.
           </p>
         </div>
-        <Link
-          href="/demo"
-          className="shrink-0 px-5 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold text-sm flex items-center space-x-2 transition-all shadow-lg shadow-cyan-950"
-        >
-          <span>Launch Demo Walkthrough</span>
-          <ArrowRight className="w-4 h-4" />
-        </Link>
+
+        <div className="pt-2 border-t border-neutral-200/80 flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-neutral-600">
+          <div className="flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block" />
+            <span className="font-sans font-medium text-neutral-800">Monad Testnet</span>
+            <span className="text-neutral-400">·</span>
+            <span>Chain ID 10143</span>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <span className="truncate max-w-[220px] sm:max-w-none text-neutral-700">
+              Registry: {registryAddress.slice(0, 8)}...{registryAddress.slice(-6)}
+            </span>
+            <a
+              href={`https://testnet.monadscan.com/address/${registryAddress}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-neutral-900 hover:underline font-sans inline-flex items-center space-x-1"
+            >
+              <span>Explorer</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        </div>
       </div>
 
-      {/* Navigation Placeholders to the Features */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Feature 1 */}
-        <Link
-          href="/verify"
-          className="group p-6 rounded-xl bg-gray-900/40 border border-gray-800 hover:border-cyan-500/50 hover:bg-gray-900/80 transition-all flex flex-col justify-between"
-        >
-          <div className="space-y-3">
-            <div className="w-10 h-10 rounded-lg bg-cyan-950/80 border border-cyan-800/60 flex items-center justify-center text-cyan-400">
-              <Shield className="w-5 h-5" />
-            </div>
-            <h2 className="text-lg font-semibold text-white group-hover:text-cyan-300 transition-colors">
-              Live Integrity Verification
-            </h2>
-            <p className="text-xs text-gray-400">
-              Verify local file bytes and piece manifests against publisher Ed25519 signatures and Monad release records.
-            </p>
-          </div>
-          <div className="mt-6 flex items-center space-x-2 text-xs font-medium text-cyan-400">
-            <span>Open Verifier</span>
-            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-          </div>
-        </Link>
-
-        {/* Feature 2 */}
-        <Link
-          href="/dna"
-          className="group p-6 rounded-xl bg-gray-900/40 border border-gray-800 hover:border-purple-500/50 hover:bg-gray-900/80 transition-all flex flex-col justify-between"
-        >
-          <div className="space-y-3">
-            <div className="w-10 h-10 rounded-lg bg-purple-950/80 border border-purple-800/60 flex items-center justify-center text-purple-400">
-              <GitCompare className="w-5 h-5" />
-            </div>
-            <h2 className="text-lg font-semibold text-white group-hover:text-purple-300 transition-colors">
-              Release DNA
-            </h2>
-            <p className="text-xs text-gray-400">
-              Compare suspicious variants sharing the same filename, trace release lineage, chunk diffs, and revocations.
-            </p>
-          </div>
-          <div className="mt-6 flex items-center space-x-2 text-xs font-medium text-purple-400">
-            <span>Compare Variants</span>
-            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-          </div>
-        </Link>
-
-        {/* Feature 3 */}
-        <Link
-          href="/risk"
-          className="group p-6 rounded-xl bg-gray-900/40 border border-gray-800 hover:border-emerald-500/50 hover:bg-gray-900/80 transition-all flex flex-col justify-between"
-        >
-          <div className="space-y-3">
-            <div className="w-10 h-10 rounded-lg bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center text-emerald-400">
-              <Activity className="w-5 h-5" />
-            </div>
-            <h2 className="text-lg font-semibold text-white group-hover:text-emerald-300 transition-colors">
-              Risk Intelligence
-            </h2>
-            <p className="text-xs text-gray-400">
-              Unified evidence panel combining provenance, on-chain revocation, and honest scanner availability reporting.
-            </p>
-          </div>
-          <div className="mt-6 flex items-center space-x-2 text-xs font-medium text-emerald-400">
-            <span>Inspect Evidence</span>
-            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-          </div>
-        </Link>
-
-        {/* Feature 4: Publisher Portal */}
-        <Link
-          href="/publisher"
-          className="group p-6 rounded-xl bg-gray-900/40 border border-gray-800 hover:border-blue-500/50 hover:bg-gray-900/80 transition-all flex flex-col justify-between"
-        >
-          <div className="space-y-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-950/80 border border-blue-800/60 flex items-center justify-center text-blue-400">
-              <KeyRound className="w-5 h-5" />
-            </div>
-            <h2 className="text-lg font-semibold text-white group-hover:text-blue-300 transition-colors">
-              Publisher Portal
-            </h2>
-            <p className="text-xs text-gray-400">
-              Authorized release commitments, deterministic state calculation, and permanent on-chain revocation on Monad.
-            </p>
-          </div>
-          <div className="mt-6 flex items-center space-x-2 text-xs font-medium text-blue-400">
-            <span>Manage Releases</span>
-            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-          </div>
-        </Link>
+      {/* Core Principle / Honesty Note */}
+      <div className="p-4 rounded-md border border-neutral-200 bg-white text-xs text-neutral-600 space-y-1">
+        <p className="font-semibold text-neutral-900">
+          Core Security Principle:
+        </p>
+        <p className="leading-relaxed">
+          A successful hash match verifies that your downloaded file is byte-for-byte identical to the publisher&apos;s signed release. It does not scan the file for malicious behavior or prove the software is free of security vulnerabilities.
+        </p>
       </div>
     </div>
   );
