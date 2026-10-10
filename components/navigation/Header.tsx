@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Shield, GitCompare, Activity, KeyRound, ExternalLink } from "lucide-react";
+import { Shield, GitCompare, Activity, KeyRound, ExternalLink, PlayCircle } from "lucide-react";
 
 export function Header() {
   const pathname = usePathname();
@@ -49,8 +49,20 @@ export function Header() {
           </nav>
         </div>
 
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-purple-950/40 border border-purple-800/50 text-xs text-purple-300">
+        <div className="flex items-center space-x-3">
+          <Link
+            href="/demo"
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              pathname === "/demo"
+                ? "bg-cyan-500 text-gray-950 shadow-md shadow-cyan-950"
+                : "bg-cyan-950/70 hover:bg-cyan-900/80 text-cyan-300 border border-cyan-700/80"
+            }`}
+          >
+            <PlayCircle className="w-3.5 h-3.5" />
+            <span>Try Demo</span>
+          </Link>
+
+          <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-full bg-purple-950/40 border border-purple-800/50 text-xs text-purple-300">
             <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
             <span>Monad Testnet (10143)</span>
           </div>
