@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+:root {
+  --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-manrope: 'Manrope', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  --bg-global: #070708;
+  --bg-content: #080809;
+  --panel-100: #101112;
+  --panel-200: #151617;
+  --panel-300: #191A1C;
+  --border-subtle: #1B1C1E;
+  --border-muted: #232426;
+  --accent-primary: #5E6BFF;
+  --text-primary: #E5E2E3;
+  --text-secondary: #9A9DA3;
+}
+
+body {
+  background-color: #070708;
+  color: #E5E2E3;
+  font-family: var(--font-inter), sans-serif;
+  letter-spacing: -0.011em;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-manrope), sans-serif;
+  letter-spacing: -0.025em;
+  font-weight: 520;
+}
+
+code, pre, .font-mono, [data-mono] {
+  font-family: var(--font-mono), monospace;
+  font-feature-settings: 'tnum' on, 'zero' on;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom sleek scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #080809;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1B1C1E;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #232426;
+}
+
+/* Controlled subtle glass and panel utilities */
+.panel-card {
+  background-color: #101112;
+  border: 1px solid #1B1C1E;
+  border-radius: 8px;
+}
+
+.panel-sub {
+  background-color: #151617;
+  border: 1px solid #1B1C1E;
+  border-radius: 4px;
+}
+
+.panel-hover:hover {
+  border-color: #232426;
+  background-color: #151617;
+}
+
+/* Tabular data cell */
+.data-tabular {
+  font-family: var(--font-mono), monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.015em;
+}

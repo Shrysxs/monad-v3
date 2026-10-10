@@ -1,66 +1,30 @@
-import { useState } from 'react';
-import { Sidebar, ActiveTab } from './components/layout/Sidebar';
-import { Header } from './components/layout/Header';
-import { LiveIntegrityView } from './components/views/LiveIntegrityView';
-import { ReleaseDnaView } from './components/views/ReleaseDnaView';
-import { RiskIntelligenceView } from './components/views/RiskIntelligenceView';
-import { QuickHashLookupModal } from './components/common/QuickHashLookupModal';
-import { VerifiedRelease } from './types/swarm';
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { LandingPage } from './pages/LandingPage';
+import { AppWorkspaceLayout } from './pages/AppWorkspaceLayout';
+import { VerifyRoute, ReleasesRoute, RiskRoute, RegistryRoute } from './pages/workspaceRoutes';
+import { NotFoundPage } from './pages/NotFoundPage';
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('integrity');
-  const [isLookupOpen, setIsLookupOpen] = useState(false);
-  const [selectedReleaseForDna, setSelectedReleaseForDna] = useState<VerifiedRelease | null>(null);
-
-  const handleInspectReleaseInDna = (release: VerifiedRelease) => {
-    setSelectedReleaseForDna(release);
-    setActiveTab('dna');
-  };
-
-  const handleResetSession = () => {
-    setSelectedReleaseForDna(null);
-    setActiveTab('integrity');
-  };
-
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[#070708] text-[#E5E2E3]">
-      {/* Persistent Left Sidebar */}
-      <Sidebar
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onOpenLookup={() => setIsLookupOpen(true)}
-      />
+    <BrowserRouter>
+      <Routes>
+        {/* Landing Page */}
+        <Route path="/" element={<LandingPage />} />
 
-      {/* Main Content Workspace */}
-      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-        {/* Top Header */}
-        <Header
-          activeTab={activeTab}
-          onOpenLookup={() => setIsLookupOpen(true)}
-          onResetSession={handleResetSession}
-        />
+        {/* Product Workspace */}
+        <Route path="/app" element={<AppWorkspaceLayout />}>
+          <Route index element={<Navigate to="/app/verify" replace />} />
+          <Route path="verify" element={<VerifyRoute />} />
+          <Route path="releases" element={<ReleasesRoute />} />
+          <Route path="risk" element={<RiskRoute />} />
+          <Route path="registry" element={<RegistryRoute />} />
+        </Route>
 
-        {/* Scrollable Content Body */}
-        <main className="flex-1 overflow-y-auto bg-[#080809]">
-          {activeTab === 'integrity' && (
-            <LiveIntegrityView onInspectReleaseInDna={handleInspectReleaseInDna} />
-          )}
-
-          {activeTab === 'dna' && (
-            <ReleaseDnaView initialSelectedRelease={selectedReleaseForDna} />
-          )}
-
-          {activeTab === 'risk' && <RiskIntelligenceView />}
-        </main>
-      </div>
-
-      {/* Global Quick Hash Lookup Modal */}
-      <QuickHashLookupModal
-        isOpen={isLookupOpen}
-        onClose={() => setIsLookupOpen(false)}
-        onSelectRelease={handleInspectReleaseInDna}
-      />
-    </div>
+        {/* Catch-all 404 Route */}
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

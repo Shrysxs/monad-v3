@@ -9,36 +9,45 @@
   --border-subtle: #1B1C1E;
   --border-muted: #232426;
   --accent-primary: #5E6BFF;
-  --text-primary: #E5E2E3;
-  --text-secondary: #9A9DA3;
+  --accent-cyan: #17B7C8;
+  --status-green: #31C875;
+  --status-warning: #E4CD19;
+  --status-error: #E45B5B;
+  --text-main: #F0F1F2;
+  --text-muted: #9A9DA3;
+}
+
+html {
+  scroll-behavior: smooth;
+  background-color: #070708;
 }
 
 body {
   margin: 0;
   padding: 0;
   background-color: #070708;
-  color: #E5E2E3;
+  color: #F0F1F2;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   letter-spacing: -0.011em;
-  overflow: hidden;
-  height: 100vh;
-  width: 100vw;
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 #root {
   width: 100%;
-  height: 100%;
+  min-height: 100vh;
   margin: 0;
   padding: 0;
   max-width: none;
   border-inline: none;
   text-align: left;
-  display: flex;
+  display: block;
 }
 
 h1, h2, h3, h4, h5, h6 {
   font-family: 'Manrope', -apple-system, sans-serif;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.03em;
   font-weight: 520;
 }
 
@@ -48,14 +57,20 @@ code, pre, .font-mono, [data-mono] {
   font-variant-numeric: tabular-nums;
 }
 
-/* Custom sleek scrollbar */
+/* Subtle cinematic dotted grid pattern */
+.bg-dot-grid {
+  background-image: radial-gradient(rgba(35, 36, 38, 0.7) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Sleek minimal scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #080809;
+  background: #070708;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -67,7 +82,6 @@ code, pre, .font-mono, [data-mono] {
   background: #232426;
 }
 
-/* Tabular data cell */
 .data-tabular {
   font-family: 'JetBrains Mono', monospace;
   font-variant-numeric: tabular-nums;

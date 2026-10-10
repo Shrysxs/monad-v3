@@ -6,20 +6,12 @@ import {
   GitCompare,
   ShieldCheck,
   ShieldAlert,
-  Dna,
-  ArrowRight,
-  Layers,
   Copy,
   Check,
-  AlertTriangle,
-  Cpu,
-  Clock,
-  Terminal,
-  FileCode,
 } from 'lucide-react';
 import { VerifiedRelease } from '@/types/swarm';
 import { MOCK_REGISTRY_RELEASES } from '@/data/mockRegistry';
-import { formatBytes, truncateHash, formatTimestamp } from '@/lib/crypto';
+import { formatBytes, formatTimestamp } from '@/lib/crypto';
 
 interface ReleaseDnaViewProps {
   initialSelectedRelease?: VerifiedRelease | null;
@@ -89,7 +81,7 @@ export function ReleaseDnaView({ initialSelectedRelease }: ReleaseDnaViewProps) 
       <div className="p-3.5 bg-[#101112] border border-[#1B1C1E] rounded-[8px] flex items-center justify-between text-xs">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-[#5E6BFF]" />
-          <span className="font-semibold text-[#E5E2E3]">
+          <span className="font-semibold text-[#F0F1F2]">
             Release DNA & Provenance Genealogy
           </span>
           <span className="text-[10px] font-mono px-2 py-0.5 rounded-[4px] bg-[#191A1C] text-[#9A9DA3] border border-[#232426]">
@@ -111,7 +103,7 @@ export function ReleaseDnaView({ initialSelectedRelease }: ReleaseDnaViewProps) 
             <button
               key={rel.id}
               onClick={() => setSelectedReleaseId(rel.id)}
-              className={`p-4 rounded-[8px] text-left transition-all border ${
+              className={`p-4 rounded-[8px] text-left transition-all border cursor-pointer ${
                 isSelected
                   ? 'bg-[#151617] border-[#5E6BFF] ring-1 ring-[#5E6BFF]/30'
                   : 'bg-[#101112] border-[#1B1C1E] hover:border-[#232426]'
@@ -122,17 +114,17 @@ export function ReleaseDnaView({ initialSelectedRelease }: ReleaseDnaViewProps) 
                   {rel.channel}
                 </span>
                 {isRevoked ? (
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-[3px] bg-[#2E1517] text-[#EF4444] border border-[#EF4444]/30 flex items-center gap-1">
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-[3px] bg-[#2E1517] text-[#E45B5B] border border-[#E45B5B]/30 flex items-center gap-1">
                     <ShieldAlert className="w-2.5 h-2.5" /> REVOKED
                   </span>
                 ) : (
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-[3px] bg-[#152E22] text-[#22C55E] border border-[#22C55E]/30 flex items-center gap-1">
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-[3px] bg-[#152E22] text-[#31C875] border border-[#31C875]/30 flex items-center gap-1">
                     <ShieldCheck className="w-2.5 h-2.5" /> VERIFIED
                   </span>
                 )}
               </div>
 
-              <div className="text-xs font-semibold text-[#E5E2E3] truncate">
+              <div className="text-xs font-semibold text-[#F0F1F2] truncate">
                 {rel.name}
               </div>
               <div className="text-[11px] font-mono text-[#5E6BFF] mt-0.5">
@@ -153,7 +145,7 @@ export function ReleaseDnaView({ initialSelectedRelease }: ReleaseDnaViewProps) 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <GitCommit className="w-4 h-4 text-[#5E6BFF]" />
-            <h3 className="text-xs font-semibold text-[#E5E2E3]">
+            <h3 className="text-xs font-semibold text-[#F0F1F2]">
               Monad Node Consensus Lineage Timeline
             </h3>
           </div>
@@ -164,7 +156,7 @@ export function ReleaseDnaView({ initialSelectedRelease }: ReleaseDnaViewProps) 
 
         {/* Visual Lineage Flow */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 relative">
-          {monadLineage.map((item, idx) => {
+          {monadLineage.map((item) => {
             const isTarget = item.releaseId === selectedReleaseId;
             return (
               <div
@@ -181,13 +173,13 @@ export function ReleaseDnaView({ initialSelectedRelease }: ReleaseDnaViewProps) 
                     <span
                       className={`w-2 h-2 rounded-full ${
                         item.status === 'current'
-                          ? 'bg-[#22C55E]'
+                          ? 'bg-[#31C875]'
                           : item.status === 'revoked'
-                          ? 'bg-[#EF4444]'
+                          ? 'bg-[#E45B5B]'
                           : 'bg-[#9A9DA3]'
                       }`}
                     />
-                    <span className="text-xs font-bold font-mono text-[#E5E2E3]">
+                    <span className="text-xs font-bold font-mono text-[#F0F1F2]">
                       {item.version}
                     </span>
                   </div>
@@ -199,9 +191,9 @@ export function ReleaseDnaView({ initialSelectedRelease }: ReleaseDnaViewProps) 
                 <div
                   className={`text-[10px] font-mono px-1.5 py-0.5 rounded-[3px] inline-block mb-2 ${
                     item.status === 'current'
-                      ? 'bg-[#152E22] text-[#22C55E]'
+                      ? 'bg-[#152E22] text-[#31C875]'
                       : item.status === 'revoked'
-                      ? 'bg-[#2E1517] text-[#EF4444]'
+                      ? 'bg-[#2E1517] text-[#E45B5B]'
                       : 'bg-[#191A1C] text-[#9A9DA3]'
                   }`}
                 >
@@ -226,7 +218,7 @@ export function ReleaseDnaView({ initialSelectedRelease }: ReleaseDnaViewProps) 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-[#1B1C1E]">
           <div className="flex items-center gap-2">
             <GitCompare className="w-4 h-4 text-[#5E6BFF]" />
-            <h3 className="text-xs font-semibold text-[#E5E2E3]">
+            <h3 className="text-xs font-semibold text-[#F0F1F2]">
               Side-by-Side Artifact Cryptographic Diff
             </h3>
           </div>
@@ -237,7 +229,7 @@ export function ReleaseDnaView({ initialSelectedRelease }: ReleaseDnaViewProps) 
             <select
               value={compareTargetId}
               onChange={(e) => setCompareTargetId(e.target.value)}
-              className="bg-[#151617] border border-[#1B1C1E] focus:border-[#5E6BFF] text-xs font-mono text-[#E5E2E3] px-2.5 py-1 rounded-[4px] outline-none"
+              className="bg-[#151617] border border-[#1B1C1E] focus:border-[#5E6BFF] text-xs font-mono text-[#F0F1F2] px-2.5 py-1 rounded-[4px] outline-none"
             >
               {MOCK_REGISTRY_RELEASES.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -252,25 +244,25 @@ export function ReleaseDnaView({ initialSelectedRelease }: ReleaseDnaViewProps) 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
           <div className="p-2.5 bg-[#151617] border border-[#1B1C1E] rounded-[4px]">
             <div className="text-[10px] text-[#9A9DA3]">Hash Match</div>
-            <div className={`mt-1 font-bold ${hashMatch ? 'text-[#22C55E]' : 'text-[#EF4444]'}`}>
+            <div className={`mt-1 font-bold ${hashMatch ? 'text-[#31C875]' : 'text-[#E45B5B]'}`}>
               {hashMatch ? 'IDENTICAL' : 'DISTINCT DIGESTS'}
             </div>
           </div>
           <div className="p-2.5 bg-[#151617] border border-[#1B1C1E] rounded-[4px]">
             <div className="text-[10px] text-[#9A9DA3]">Size Delta</div>
-            <div className={`mt-1 font-bold ${sizeDelta > 0 ? 'text-[#38BDF8]' : sizeDelta < 0 ? 'text-[#F97316]' : 'text-[#9A9DA3]'}`}>
+            <div className={`mt-1 font-bold ${sizeDelta > 0 ? 'text-[#17B7C8]' : sizeDelta < 0 ? 'text-[#F97316]' : 'text-[#9A9DA3]'}`}>
               {sizeDelta > 0 ? `+${formatBytes(sizeDelta)}` : sizeDelta < 0 ? `-${formatBytes(Math.abs(sizeDelta))}` : '0 bytes'}
             </div>
           </div>
           <div className="p-2.5 bg-[#151617] border border-[#1B1C1E] rounded-[4px]">
             <div className="text-[10px] text-[#9A9DA3]">Block Delta</div>
-            <div className="mt-1 font-bold text-[#E5E2E3]">
+            <div className="mt-1 font-bold text-[#F0F1F2]">
               {blockDelta > 0 ? `+${blockDelta.toLocaleString()}` : blockDelta.toLocaleString()}
             </div>
           </div>
           <div className="p-2.5 bg-[#151617] border border-[#1B1C1E] rounded-[4px]">
             <div className="text-[10px] text-[#9A9DA3]">Revocation Delta</div>
-            <div className="mt-1 font-bold text-[#E5E2E3]">
+            <div className="mt-1 font-bold text-[#F0F1F2]">
               {selectedRelease.revoked?.isRevoked !== compareRelease.revoked?.isRevoked
                 ? 'STATUS DIVERGENCE'
                 : 'STATUS EQUAL'}
@@ -285,7 +277,7 @@ export function ReleaseDnaView({ initialSelectedRelease }: ReleaseDnaViewProps) 
             <div className="flex items-center justify-between pb-2 border-b border-[#1B1C1E]">
               <div>
                 <span className="text-[10px] font-mono text-[#5E6BFF] uppercase">Artifact Alpha (Base)</span>
-                <div className="text-xs font-bold text-[#E5E2E3]">{selectedRelease.name}</div>
+                <div className="text-xs font-bold text-[#F0F1F2]">{selectedRelease.name}</div>
               </div>
               <span className="text-xs font-mono text-[#5E6BFF]">{selectedRelease.tag}</span>
             </div>
@@ -297,10 +289,10 @@ export function ReleaseDnaView({ initialSelectedRelease }: ReleaseDnaViewProps) 
                   <span>{selectedRelease.sha256}</span>
                   <button
                     onClick={() => handleCopy(selectedRelease.sha256)}
-                    className="p-1 text-[#9A9DA3] hover:text-[#E5E2E3]"
+                    className="p-1 text-[#9A9DA3] hover:text-[#F0F1F2] cursor-pointer"
                   >
                     {copiedHash === selectedRelease.sha256 ? (
-                      <Check className="w-3 h-3 text-[#22C55E]" />
+                      <Check className="w-3 h-3 text-[#31C875]" />
                     ) : (
                       <Copy className="w-3 h-3" />
                     )}
@@ -310,27 +302,27 @@ export function ReleaseDnaView({ initialSelectedRelease }: ReleaseDnaViewProps) 
 
               <div className="flex justify-between py-1 border-b border-[#1B1C1E]/50">
                 <span className="text-[#9A9DA3]">Binary File:</span>
-                <span className="font-mono text-[#E5E2E3]">{selectedRelease.fileName}</span>
+                <span className="font-mono text-[#F0F1F2]">{selectedRelease.fileName}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-[#1B1C1E]/50">
                 <span className="text-[#9A9DA3]">Payload Size:</span>
-                <span className="font-mono text-[#E5E2E3]">{formatBytes(selectedRelease.fileSize)}</span>
+                <span className="font-mono text-[#F0F1F2]">{formatBytes(selectedRelease.fileSize)}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-[#1B1C1E]/50">
                 <span className="text-[#9A9DA3]">Release Date:</span>
-                <span className="font-mono text-[#E5E2E3]">{formatTimestamp(selectedRelease.releaseDate)}</span>
+                <span className="font-mono text-[#F0F1F2]">{formatTimestamp(selectedRelease.releaseDate)}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-[#1B1C1E]/50">
                 <span className="text-[#9A9DA3]">Monad Block Anchor:</span>
-                <span className="font-mono text-[#E5E2E3]">#{selectedRelease.monadBlockNumber.toLocaleString()}</span>
+                <span className="font-mono text-[#F0F1F2]">#{selectedRelease.monadBlockNumber.toLocaleString()}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-[#1B1C1E]/50">
                 <span className="text-[#9A9DA3]">Publisher Key:</span>
-                <span className="font-mono text-[#E5E2E3] text-[10px]">{selectedRelease.publisher.signingKeyId}</span>
+                <span className="font-mono text-[#F0F1F2] text-[10px]">{selectedRelease.publisher.signingKeyId}</span>
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-[#9A9DA3]">Build Environment:</span>
-                <span className="font-mono text-[#22C55E] text-[10px] text-right truncate max-w-[200px]">
+                <span className="font-mono text-[#31C875] text-[10px] text-right truncate max-w-[200px]">
                   {selectedRelease.reproducibleBuild.buildEnvironment}
                 </span>
               </div>
@@ -342,7 +334,7 @@ export function ReleaseDnaView({ initialSelectedRelease }: ReleaseDnaViewProps) 
             <div className="flex items-center justify-between pb-2 border-b border-[#1B1C1E]">
               <div>
                 <span className="text-[10px] font-mono text-[#9A9DA3] uppercase">Artifact Beta (Comparator)</span>
-                <div className="text-xs font-bold text-[#E5E2E3]">{compareRelease.name}</div>
+                <div className="text-xs font-bold text-[#F0F1F2]">{compareRelease.name}</div>
               </div>
               <span className="text-xs font-mono text-[#9A9DA3]">{compareRelease.tag}</span>
             </div>
@@ -354,10 +346,10 @@ export function ReleaseDnaView({ initialSelectedRelease }: ReleaseDnaViewProps) 
                   <span>{compareRelease.sha256}</span>
                   <button
                     onClick={() => handleCopy(compareRelease.sha256)}
-                    className="p-1 text-[#9A9DA3] hover:text-[#E5E2E3]"
+                    className="p-1 text-[#9A9DA3] hover:text-[#F0F1F2] cursor-pointer"
                   >
                     {copiedHash === compareRelease.sha256 ? (
-                      <Check className="w-3 h-3 text-[#22C55E]" />
+                      <Check className="w-3 h-3 text-[#31C875]" />
                     ) : (
                       <Copy className="w-3 h-3" />
                     )}
@@ -367,27 +359,27 @@ export function ReleaseDnaView({ initialSelectedRelease }: ReleaseDnaViewProps) 
 
               <div className="flex justify-between py-1 border-b border-[#1B1C1E]/50">
                 <span className="text-[#9A9DA3]">Binary File:</span>
-                <span className="font-mono text-[#E5E2E3]">{compareRelease.fileName}</span>
+                <span className="font-mono text-[#F0F1F2]">{compareRelease.fileName}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-[#1B1C1E]/50">
                 <span className="text-[#9A9DA3]">Payload Size:</span>
-                <span className="font-mono text-[#E5E2E3]">{formatBytes(compareRelease.fileSize)}</span>
+                <span className="font-mono text-[#F0F1F2]">{formatBytes(compareRelease.fileSize)}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-[#1B1C1E]/50">
                 <span className="text-[#9A9DA3]">Release Date:</span>
-                <span className="font-mono text-[#E5E2E3]">{formatTimestamp(compareRelease.releaseDate)}</span>
+                <span className="font-mono text-[#F0F1F2]">{formatTimestamp(compareRelease.releaseDate)}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-[#1B1C1E]/50">
                 <span className="text-[#9A9DA3]">Monad Block Anchor:</span>
-                <span className="font-mono text-[#E5E2E3]">#{compareRelease.monadBlockNumber.toLocaleString()}</span>
+                <span className="font-mono text-[#F0F1F2]">#{compareRelease.monadBlockNumber.toLocaleString()}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-[#1B1C1E]/50">
                 <span className="text-[#9A9DA3]">Publisher Key:</span>
-                <span className="font-mono text-[#E5E2E3] text-[10px]">{compareRelease.publisher.signingKeyId}</span>
+                <span className="font-mono text-[#F0F1F2] text-[10px]">{compareRelease.publisher.signingKeyId}</span>
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-[#9A9DA3]">Build Environment:</span>
-                <span className="font-mono text-[#E5E2E3] text-[10px] text-right truncate max-w-[200px]">
+                <span className="font-mono text-[#F0F1F2] text-[10px] text-right truncate max-w-[200px]">
                   {compareRelease.reproducibleBuild.buildEnvironment}
                 </span>
               </div>
@@ -398,3 +390,5 @@ export function ReleaseDnaView({ initialSelectedRelease }: ReleaseDnaViewProps) 
     </div>
   );
 }
+
+export default ReleaseDnaView;

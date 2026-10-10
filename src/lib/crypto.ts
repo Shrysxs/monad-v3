@@ -1,8 +1,5 @@
-import {
+import type {
   VerificationResult,
-  VerificationStatus,
-  AuthenticityStatus,
-  ScannerStatus,
   VerifiedRelease,
 } from '../types/swarm';
 import { MOCK_REGISTRY_RELEASES } from '../data/mockRegistry';

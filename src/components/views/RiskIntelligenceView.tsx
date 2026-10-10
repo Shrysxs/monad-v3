@@ -2,21 +2,13 @@
 
 import React, { useState } from 'react';
 import {
-  ShieldAlert,
-  ShieldCheck,
-  Activity,
   AlertTriangle,
-  FileText,
   Filter,
   CheckCircle2,
   XCircle,
   HelpCircle,
-  Terminal,
-  Clock,
-  Layers,
   Info,
 } from 'lucide-react';
-import { RiskEvidenceItem } from '@/types/swarm';
 import { MOCK_RISK_EVIDENCE } from '@/data/mockRegistry';
 import { formatTimestamp } from '@/lib/crypto';
 
@@ -51,7 +43,7 @@ export function RiskIntelligenceView() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Info className="w-4 h-4 text-[#5E6BFF]" />
-            <h3 className="text-xs font-semibold text-[#E5E2E3]">
+            <h3 className="text-xs font-semibold text-[#F0F1F2]">
               Risk Architecture: Deterministic Authenticity vs. Heuristic Scanner Findings
             </h3>
           </div>
@@ -62,8 +54,8 @@ export function RiskIntelligenceView() {
         <p className="text-xs text-[#9A9DA3] leading-relaxed">
           Publisher signatures prove identity using on-chain consensus anchors. Conversely, vulnerability and malware
           detection relies on external heuristic engines. In standard local execution mode, external malware engines are{' '}
-          <strong className="text-[#E5E2E3] font-mono">SCANNER_UNAVAILABLE</strong> or{' '}
-          <strong className="text-[#E5E2E3] font-mono">NOT_SCANNED</strong>. SwarmTrace strictly distinguishes
+          <strong className="text-[#F0F1F2] font-mono">SCANNER_UNAVAILABLE</strong> or{' '}
+          <strong className="text-[#F0F1F2] font-mono">NOT_SCANNED</strong>. Penguin Trace strictly distinguishes
           author verification from binary safety.
         </p>
       </div>
@@ -73,18 +65,18 @@ export function RiskIntelligenceView() {
         <div className="p-4 bg-[#101112] border border-[#1B1C1E] rounded-[8px]">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-mono text-[#9A9DA3]">Consensus Proofs</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[#31C875]" />
           </div>
-          <div className="text-lg font-bold font-mono text-[#E5E2E3] mt-1">100% Valid</div>
+          <div className="text-lg font-bold font-mono text-[#F0F1F2] mt-1">100% Valid</div>
           <div className="text-[10px] text-[#9A9DA3] mt-0.5">19/21 Monad Validators</div>
         </div>
 
         <div className="p-4 bg-[#101112] border border-[#1B1C1E] rounded-[8px]">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-mono text-[#9A9DA3]">Supply Chain Attestation</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[#31C875]" />
           </div>
-          <div className="text-lg font-bold font-mono text-[#E5E2E3] mt-1">SLSA L3</div>
+          <div className="text-lg font-bold font-mono text-[#F0F1F2] mt-1">SLSA L3</div>
           <div className="text-[10px] text-[#9A9DA3] mt-0.5">Rekor Log #109481230</div>
         </div>
 
@@ -100,9 +92,9 @@ export function RiskIntelligenceView() {
         <div className="p-4 bg-[#101112] border border-[#1B1C1E] rounded-[8px]">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-mono text-[#9A9DA3]">Active Revocations</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[#E45B5B]" />
           </div>
-          <div className="text-lg font-bold font-mono text-[#EF4444] mt-1">1 Advisory</div>
+          <div className="text-lg font-bold font-mono text-[#E45B5B] mt-1">1 Advisory</div>
           <div className="text-[10px] text-[#9A9DA3] mt-0.5">MN-SEC-2026-09</div>
         </div>
       </div>
@@ -116,10 +108,10 @@ export function RiskIntelligenceView() {
             <button
               key={c.id}
               onClick={() => setSelectedCategory(c.id)}
-              className={`px-2.5 py-1 text-xs rounded-[4px] font-mono whitespace-nowrap transition-colors ${
+              className={`px-2.5 py-1 text-xs rounded-[4px] font-mono whitespace-nowrap transition-colors cursor-pointer ${
                 selectedCategory === c.id
                   ? 'bg-[#151617] text-[#5E6BFF] border border-[#5E6BFF]/40'
-                  : 'text-[#9A9DA3] hover:text-[#E5E2E3] hover:bg-[#151617] border border-transparent'
+                  : 'text-[#9A9DA3] hover:text-[#F0F1F2] hover:bg-[#151617] border border-transparent'
               }`}
             >
               {c.label}
@@ -133,7 +125,7 @@ export function RiskIntelligenceView() {
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="bg-[#151617] border border-[#1B1C1E] focus:border-[#5E6BFF] text-xs font-mono text-[#E5E2E3] px-2 py-1 rounded-[4px] outline-none"
+            className="bg-[#151617] border border-[#1B1C1E] focus:border-[#5E6BFF] text-xs font-mono text-[#F0F1F2] px-2 py-1 rounded-[4px] outline-none"
           >
             <option value="ALL">All Statuses</option>
             <option value="PASS">PASS</option>
@@ -169,7 +161,7 @@ export function RiskIntelligenceView() {
                       className="hover:bg-[#151617] cursor-pointer transition-colors"
                     >
                       <td className="py-3.5 px-4">
-                        <div className="font-semibold text-[#E5E2E3]">
+                        <div className="font-semibold text-[#F0F1F2]">
                           {item.source}
                         </div>
                         <div className="text-[10px] font-mono text-[#9A9DA3] mt-0.5">
@@ -178,7 +170,7 @@ export function RiskIntelligenceView() {
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <div className="text-[#E5E2E3]">{item.type}</div>
+                        <div className="text-[#F0F1F2]">{item.type}</div>
                         <div className="text-[10px] font-mono text-[#9A9DA3]">
                           {item.category}
                         </div>
@@ -186,12 +178,12 @@ export function RiskIntelligenceView() {
 
                       <td className="py-3.5 px-4">
                         {item.status === 'PASS' && (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-mono text-[#22C55E] bg-[#152E22] px-2 py-0.5 rounded-[4px] border border-[#22C55E]/30">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-mono text-[#31C875] bg-[#152E22] px-2 py-0.5 rounded-[4px] border border-[#31C875]/30">
                             <CheckCircle2 className="w-3 h-3" /> PASS
                           </span>
                         )}
                         {item.status === 'REVOKED' && (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-mono text-[#EF4444] bg-[#2E1517] px-2 py-0.5 rounded-[4px] border border-[#EF4444]/30">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-mono text-[#E45B5B] bg-[#2E1517] px-2 py-0.5 rounded-[4px] border border-[#E45B5B]/30">
                             <XCircle className="w-3 h-3" /> REVOKED
                           </span>
                         )}
@@ -230,7 +222,7 @@ export function RiskIntelligenceView() {
                             <span>Recorded Timestamp: {formatTimestamp(item.timestamp)}</span>
                             <span>Vector: {item.category}</span>
                           </div>
-                          <div className="p-3 bg-[#101112] border border-[#1B1C1E] rounded-[4px] text-xs font-mono text-[#E5E2E3]">
+                          <div className="p-3 bg-[#101112] border border-[#1B1C1E] rounded-[4px] text-xs font-mono text-[#F0F1F2]">
                             {item.details}
                           </div>
                         </td>
@@ -246,3 +238,5 @@ export function RiskIntelligenceView() {
     </div>
   );
 }
+
+export default RiskIntelligenceView;

@@ -3,7 +3,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
   UploadCloud,
-  FileCheck,
   ShieldCheck,
   ShieldAlert,
   ShieldX,
@@ -11,17 +10,15 @@ import {
   Copy,
   Check,
   FileCode,
-  Terminal,
-  Activity,
   Info,
-  Clock,
-  Layers,
-  Sparkles,
   ExternalLink,
+  RotateCcw,
+  Trash2,
 } from 'lucide-react';
-import { VerificationResult, VerificationStatus, VerifiedRelease } from '@/types/swarm';
-import { calculateFileSha256, verifyAgainstRegistry, formatBytes, truncateHash, formatTimestamp } from '@/lib/crypto';
+import { VerificationResult, VerifiedRelease } from '@/types/swarm';
+import { calculateFileSha256, verifyAgainstRegistry, formatBytes, truncateHash } from '@/lib/crypto';
 import { MOCK_REGISTRY_RELEASES } from '@/data/mockRegistry';
+import { useNavigate } from 'react-router-dom';
 
 interface LiveIntegrityViewProps {
   onInspectReleaseInDna?: (release: VerifiedRelease) => void;
@@ -33,14 +30,17 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [progressPhase, setProgressPhase] = useState<string>('');
   const [result, setResult] = useState<VerificationResult | null>(null);
+  const [currentFile, setCurrentFile] = useState<File | null>(null);
   const [copiedHash, setCopiedHash] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
 
   const processFile = async (file: File) => {
     setIsProcessing(true);
     setProgressPercent(5);
     setProgressPhase('Initializing Web Crypto context...');
     setResult(null);
+    setCurrentFile(file);
 
     try {
       const { hash, durationMs } = await calculateFileSha256(file, (percent, phase) => {
@@ -96,22 +96,29 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
     }
   };
 
+  const handleClearFile = () => {
+    setResult(null);
+    setCurrentFile(null);
+    setProgressPercent(0);
+    setProgressPhase('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedHash(true);
     setTimeout(() => setCopiedHash(false), 2000);
   };
 
-  // Test helpers to load simulated sample files for testing various verification states
-  const triggerSampleTest = (type: 'matching' | 'mismatch' | 'unknown' | 'revoked' | 'error') => {
+  // Helper to test each specific verification status on demand
+  const triggerSampleTest = (type: 'matching' | 'mismatch' | 'unknown' | 'revoked' | 'error' | 'invalid_sig') => {
     let mockBlob: Blob;
     let fileName: string;
 
     if (type === 'matching') {
-      // Content produces known hash or simulated exact target
-      // We create a sample with exact content or inject target
       fileName = 'monad-node-v0.8.2-linux-x86_64.tar.gz';
-      // To simulate matching directly, create a text blob and process with custom target:
       mockBlob = new Blob(['Monad-Consensus-Node-v0.8.2-Deterministic-Release-Payload'], {
         type: 'application/gzip',
       });
@@ -123,6 +130,11 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
     } else if (type === 'revoked') {
       fileName = 'monad-node-v0.8.2-rc1-linux-x86_64.tar.gz';
       mockBlob = new Blob(['Monad-Node-RC1-Memory-Vulnerability-Exploitable-Candidate'], {
+        type: 'application/gzip',
+      });
+    } else if (type === 'invalid_sig') {
+      fileName = 'monad-node-v0.8.2-unsigned.tar.gz';
+      mockBlob = new Blob(['Unsigned build candidate with compromised ed25519 signature'], {
         type: 'application/gzip',
       });
     } else if (type === 'error') {
@@ -140,7 +152,9 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
       lastModified: Date.now(),
     });
 
-    // For matching / revoked demo test, we compute the real hash or inject mock for deterministic matching demo:
+    setCurrentFile(testFile);
+
+    // Simulate real timing for demo test triggers
     if (type === 'matching' || type === 'revoked') {
       setIsProcessing(true);
       setProgressPercent(15);
@@ -160,12 +174,19 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
 
           const res = verifyAgainstRegistry(testFile, targetRel.sha256, 142);
           setResult(res);
-        }, 300);
-      }, 350);
+        }, 200);
+      }, 250);
       return;
     }
 
     processFile(testFile);
+  };
+
+  const handleInspectRelease = (rel: VerifiedRelease) => {
+    if (onInspectReleaseInDna) {
+      onInspectReleaseInDna(rel);
+    }
+    navigate('/app/releases');
   };
 
   return (
@@ -177,50 +198,55 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
             <ShieldCheck className="w-4 h-4 text-[#5E6BFF]" />
           </div>
           <div>
-            <div className="text-xs font-semibold text-[#E5E2E3] flex items-center gap-2">
+            <div className="text-xs font-semibold text-[#F0F1F2] flex items-center gap-2">
               Browser-Side Web Crypto Execution
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#152E22] text-[#22C55E] border border-[#22C55E]/30">
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#152E22] text-[#31C875] border border-[#31C875]/30">
                 100% PRIVATE
               </span>
             </div>
             <p className="text-[11px] text-[#9A9DA3] mt-0.5 max-w-2xl">
               File bytes are never uploaded. Cryptographic SHA-256 hashes are calculated locally via{' '}
-              <code className="text-[#E5E2E3] font-mono">crypto.subtle.digest</code> and validated against
+              <code className="text-[#F0F1F2] font-mono">crypto.subtle.digest</code> and validated against
               the Monad release registry ledger.
             </p>
           </div>
         </div>
 
-        {/* Demo Test Triggers */}
-        <div className="flex items-center gap-1.5 shrink-0 self-end md:self-center">
-          <span className="text-[10px] font-mono text-[#9A9DA3] mr-1">Demo States:</span>
+        {/* Demo Test State Triggers */}
+        <div className="flex flex-wrap items-center gap-1.5 shrink-0 self-end md:self-center">
+          <span className="text-[10px] font-mono text-[#9A9DA3] mr-1">Status Demos:</span>
           <button
             onClick={() => triggerSampleTest('matching')}
-            className="px-2 py-1 text-[11px] font-mono bg-[#151617] hover:bg-[#191A1C] border border-[#1B1C1E] hover:border-[#22C55E]/40 text-[#22C55E] rounded-[4px] transition-colors"
+            className="px-2 py-1 text-[11px] font-mono bg-[#151617] hover:bg-[#191A1C] border border-[#1B1C1E] hover:border-[#31C875]/40 text-[#31C875] rounded-[4px] transition-colors cursor-pointer"
+            title="Test Matching Authenticated Release"
           >
             Match
           </button>
           <button
             onClick={() => triggerSampleTest('mismatch')}
-            className="px-2 py-1 text-[11px] font-mono bg-[#151617] hover:bg-[#191A1C] border border-[#1B1C1E] hover:border-[#EF4444]/40 text-[#EF4444] rounded-[4px] transition-colors"
+            className="px-2 py-1 text-[11px] font-mono bg-[#151617] hover:bg-[#191A1C] border border-[#1B1C1E] hover:border-[#E45B5B]/40 text-[#E45B5B] rounded-[4px] transition-colors cursor-pointer"
+            title="Test Hash Mismatch / Tampered Binary"
           >
             Mismatch
           </button>
           <button
             onClick={() => triggerSampleTest('revoked')}
-            className="px-2 py-1 text-[11px] font-mono bg-[#151617] hover:bg-[#191A1C] border border-[#1B1C1E] hover:border-[#F97316]/40 text-[#F97316] rounded-[4px] transition-colors"
+            className="px-2 py-1 text-[11px] font-mono bg-[#151617] hover:bg-[#191A1C] border border-[#1B1C1E] hover:border-[#F97316]/40 text-[#F97316] rounded-[4px] transition-colors cursor-pointer"
+            title="Test Revoked Release"
           >
             Revoked
           </button>
           <button
             onClick={() => triggerSampleTest('unknown')}
-            className="px-2 py-1 text-[11px] font-mono bg-[#151617] hover:bg-[#191A1C] border border-[#1B1C1E] hover:border-[#EAB308]/40 text-[#EAB308] rounded-[4px] transition-colors"
+            className="px-2 py-1 text-[11px] font-mono bg-[#151617] hover:bg-[#191A1C] border border-[#1B1C1E] hover:border-[#E4CD19]/40 text-[#E4CD19] rounded-[4px] transition-colors cursor-pointer"
+            title="Test Unknown Unregistered Artifact"
           >
             Unknown
           </button>
           <button
             onClick={() => triggerSampleTest('error')}
-            className="px-2 py-1 text-[11px] font-mono bg-[#151617] hover:bg-[#191A1C] border border-[#1B1C1E] hover:border-[#9A9DA3]/40 text-[#9A9DA3] rounded-[4px] transition-colors"
+            className="px-2 py-1 text-[11px] font-mono bg-[#151617] hover:bg-[#191A1C] border border-[#1B1C1E] hover:border-[#9A9DA3]/40 text-[#9A9DA3] rounded-[4px] transition-colors cursor-pointer"
+            title="Test Verification Error on Corrupt/0-byte File"
           >
             Error
           </button>
@@ -252,8 +278,8 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
             <UploadCloud className="w-6 h-6 text-[#5E6BFF]" />
           </div>
 
-          <h3 className="text-sm font-semibold text-[#E5E2E3]">
-            Drop artifact binary here, or{' '}
+          <h3 className="text-sm font-semibold text-[#F0F1F2]">
+            {currentFile ? 'Replace selected binary, or ' : 'Drop artifact binary here, or '}
             <span className="text-[#5E6BFF] underline underline-offset-2">browse filesystem</span>
           </h3>
           <p className="text-xs text-[#9A9DA3] mt-1.5 leading-relaxed">
@@ -267,7 +293,7 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
               Web Crypto API
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-[#31C875]" />
               Client-Only Sandbox
             </span>
             <span className="flex items-center gap-1.5">
@@ -278,11 +304,39 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
         </div>
       </div>
 
+      {/* Selected File Action Bar (Replacement / Removal) */}
+      {currentFile && (
+        <div className="p-3 bg-[#151617] border border-[#1B1C1E] rounded-[6px] flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2.5 font-mono text-[#F0F1F2]">
+            <FileCode className="w-4 h-4 text-[#5E6BFF]" />
+            <span>{currentFile.name}</span>
+            <span className="text-[#9A9DA3]">({formatBytes(currentFile.size)})</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="px-2.5 py-1 bg-[#101112] hover:bg-[#191A1C] border border-[#1B1C1E] rounded text-[11px] font-mono text-[#F0F1F2] transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <RotateCcw className="w-3 h-3 text-[#5E6BFF]" />
+              <span>Replace File</span>
+            </button>
+            <button
+              onClick={handleClearFile}
+              className="px-2.5 py-1 bg-[#2E1517] hover:bg-[#3D1A1D] border border-[#E45B5B]/30 rounded text-[11px] font-mono text-[#E45B5B] transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>Remove</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Real-time Calculation Progress Bar */}
       {isProcessing && (
         <div className="p-4 bg-[#101112] border border-[#1B1C1E] rounded-[8px] space-y-3">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-mono text-[#E5E2E3] flex items-center gap-2">
+            <span className="font-mono text-[#F0F1F2] flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#5E6BFF] animate-ping" />
               {progressPhase}
             </span>
@@ -304,28 +358,28 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
           <div
             className={`p-5 rounded-[8px] border flex flex-col md:flex-row md:items-center justify-between gap-4 ${
               result.status === 'matching'
-                ? 'bg-[#101914] border-[#22C55E]/30'
+                ? 'bg-[#101914] border-[#31C875]/30'
                 : result.status === 'mismatch'
-                ? 'bg-[#251214] border-[#EF4444]/40'
+                ? 'bg-[#251214] border-[#E45B5B]/40'
                 : result.status === 'revoked'
                 ? 'bg-[#29170F] border-[#F97316]/40'
                 : result.status === 'unknown'
-                ? 'bg-[#211E10] border-[#EAB308]/40'
+                ? 'bg-[#211E10] border-[#E4CD19]/40'
                 : 'bg-[#1F171A] border-[#9A9DA3]/30'
             }`}
           >
             <div className="flex items-start gap-3">
               {result.status === 'matching' && (
-                <ShieldCheck className="w-6 h-6 text-[#22C55E] shrink-0 mt-0.5" />
+                <ShieldCheck className="w-6 h-6 text-[#31C875] shrink-0 mt-0.5" />
               )}
               {result.status === 'mismatch' && (
-                <ShieldX className="w-6 h-6 text-[#EF4444] shrink-0 mt-0.5" />
+                <ShieldX className="w-6 h-6 text-[#E45B5B] shrink-0 mt-0.5" />
               )}
               {result.status === 'revoked' && (
                 <ShieldAlert className="w-6 h-6 text-[#F97316] shrink-0 mt-0.5" />
               )}
               {result.status === 'unknown' && (
-                <AlertTriangle className="w-6 h-6 text-[#EAB308] shrink-0 mt-0.5" />
+                <AlertTriangle className="w-6 h-6 text-[#E4CD19] shrink-0 mt-0.5" />
               )}
               {result.status === 'error' && (
                 <AlertTriangle className="w-6 h-6 text-[#9A9DA3] shrink-0 mt-0.5" />
@@ -333,12 +387,12 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
 
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold text-[#E5E2E3]">
-                    {result.status === 'matching' && 'MATCHING: VERIFIED PUBLISHER ARTIFACT'}
-                    {result.status === 'mismatch' && 'INTEGRITY MISMATCH: POTENTIAL TAMPERING'}
-                    {result.status === 'revoked' && 'REVOKED ARTIFACT: SIGNING CERTIFICATE WITHDRAWN'}
-                    {result.status === 'unknown' && 'UNKNOWN: UNREGISTERED IN MONAD LEDGER'}
-                    {result.status === 'error' && 'VERIFICATION ERROR'}
+                  <h3 className="text-sm font-bold text-[#F0F1F2]">
+                    {result.status === 'matching' && 'MATCHING_AUTHENTICATED_RELEASE'}
+                    {result.status === 'mismatch' && 'HASH_MISMATCH: POTENTIAL TAMPERING'}
+                    {result.status === 'revoked' && 'REVOKED_RELEASE: CERTIFICATE WITHDRAWN'}
+                    {result.status === 'unknown' && 'UNKNOWN_RELEASE: UNREGISTERED IN MONAD LEDGER'}
+                    {result.status === 'error' && 'VERIFICATION_ERROR'}
                   </h3>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-[4px] uppercase bg-black/40 border border-current text-inherit">
                     {result.authenticity}
@@ -359,10 +413,10 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
             </div>
 
             {/* Inspect in DNA action */}
-            {result.matchedRelease && onInspectReleaseInDna && (
+            {result.matchedRelease && (
               <button
-                onClick={() => onInspectReleaseInDna(result.matchedRelease!)}
-                className="px-3 py-2 bg-[#101112] hover:bg-[#151617] border border-[#1B1C1E] hover:border-[#232426] text-xs font-medium text-[#E5E2E3] rounded-[4px] flex items-center gap-1.5 self-start md:self-center transition-colors shrink-0"
+                onClick={() => handleInspectRelease(result.matchedRelease!)}
+                className="px-3 py-2 bg-[#101112] hover:bg-[#151617] border border-[#1B1C1E] hover:border-[#232426] text-xs font-medium text-[#F0F1F2] rounded-[4px] flex items-center gap-1.5 self-start md:self-center transition-colors shrink-0 cursor-pointer"
               >
                 <span>View in Release DNA</span>
                 <ExternalLink className="w-3.5 h-3.5 text-[#5E6BFF]" />
@@ -375,7 +429,7 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Info className="w-4 h-4 text-[#5E6BFF]" />
-                <span className="text-xs font-semibold text-[#E5E2E3]">
+                <span className="text-xs font-semibold text-[#F0F1F2]">
                   Security Protocol: Authenticity vs. Malware Analysis
                 </span>
               </div>
@@ -384,9 +438,9 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
               </span>
             </div>
             <p className="text-[11px] text-[#9A9DA3] leading-relaxed">
-              <strong className="text-[#E5E2E3]">Authenticity</strong> proves that this specific binary was produced and signed by the verified publisher.
-              It does <span className="underline text-[#EF4444]">NOT</span> guarantee absence of zero-days or supply chain flaws.{' '}
-              <span className="text-[#E5E2E3]">
+              <strong className="text-[#F0F1F2]">Authenticity</strong> proves that this specific binary was produced and signed by the verified publisher.
+              It does <span className="underline text-[#E45B5B]">NOT</span> guarantee absence of zero-days or supply chain flaws.{' '}
+              <span className="text-[#F0F1F2]">
                 {result.scannerNotice}
               </span>
             </p>
@@ -396,7 +450,7 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* File & Hash Panel */}
             <div className="p-4 bg-[#101112] border border-[#1B1C1E] rounded-[8px] space-y-3">
-              <div className="text-xs font-semibold text-[#E5E2E3] flex items-center justify-between border-b border-[#1B1C1E] pb-2">
+              <div className="text-xs font-semibold text-[#F0F1F2] flex items-center justify-between border-b border-[#1B1C1E] pb-2">
                 <span className="flex items-center gap-2">
                   <FileCode className="w-3.5 h-3.5 text-[#5E6BFF]" />
                   Local File Attributes
@@ -409,17 +463,17 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between items-center">
                   <span className="text-[#9A9DA3]">File Name:</span>
-                  <span className="font-mono text-[#E5E2E3] font-medium">{result.fileName}</span>
+                  <span className="font-mono text-[#F0F1F2] font-medium">{result.fileName}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-[#9A9DA3]">File Size:</span>
-                  <span className="font-mono text-[#E5E2E3]">
+                  <span className="font-mono text-[#F0F1F2]">
                     {formatBytes(result.fileSize)} ({result.fileSize.toLocaleString()} bytes)
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-[#9A9DA3]">MIME Type:</span>
-                  <span className="font-mono text-[#E5E2E3]">{result.mimeType}</span>
+                  <span className="font-mono text-[#F0F1F2]">{result.mimeType}</span>
                 </div>
 
                 <div className="pt-2 border-t border-[#1B1C1E]">
@@ -427,9 +481,9 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
                     <span>Computed SHA-256 Digest:</span>
                     <button
                       onClick={() => handleCopy(result.computedSha256)}
-                      className="text-[10px] font-mono text-[#5E6BFF] hover:underline flex items-center gap-1"
+                      className="text-[10px] font-mono text-[#5E6BFF] hover:underline flex items-center gap-1 cursor-pointer"
                     >
-                      {copiedHash ? <Check className="w-3 h-3 text-[#22C55E]" /> : <Copy className="w-3 h-3" />}
+                      {copiedHash ? <Check className="w-3 h-3 text-[#31C875]" /> : <Copy className="w-3 h-3" />}
                       {copiedHash ? 'Copied' : 'Copy Full Hex'}
                     </button>
                   </div>
@@ -442,9 +496,9 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
 
             {/* Registry Metadata Panel */}
             <div className="p-4 bg-[#101112] border border-[#1B1C1E] rounded-[8px] space-y-3">
-              <div className="text-xs font-semibold text-[#E5E2E3] flex items-center justify-between border-b border-[#1B1C1E] pb-2">
+              <div className="text-xs font-semibold text-[#F0F1F2] flex items-center justify-between border-b border-[#1B1C1E] pb-2">
                 <span className="flex items-center gap-2">
-                  <Layers className="w-3.5 h-3.5 text-[#5E6BFF]" />
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#5E6BFF]" />
                   Monad Provenance Ledger
                 </span>
                 <span className="text-[10px] font-mono px-1.5 py-0.2 bg-[#191A1C] text-[#9A9DA3] border border-[#232426] rounded-[3px]">
@@ -456,7 +510,7 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
                 <div className="space-y-2 text-xs">
                   <div className="flex justify-between items-center">
                     <span className="text-[#9A9DA3]">Release Name:</span>
-                    <span className="font-semibold text-[#E5E2E3]">{result.matchedRelease.name}</span>
+                    <span className="font-semibold text-[#F0F1F2]">{result.matchedRelease.name}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-[#9A9DA3]">Version Tag:</span>
@@ -464,32 +518,32 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-[#9A9DA3]">Publisher:</span>
-                    <span className="font-mono text-[#E5E2E3] text-[11px]">
+                    <span className="font-mono text-[#F0F1F2] text-[11px]">
                       {result.matchedRelease.publisher.name} ({truncateHash(result.matchedRelease.publisher.address, 6, 4)})
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-[#9A9DA3]">On-Chain Anchor:</span>
-                    <span className="font-mono text-[#E5E2E3] text-[11px]">
+                    <span className="font-mono text-[#F0F1F2] text-[11px]">
                       Block #{result.matchedRelease.monadBlockNumber.toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-[#9A9DA3]">Reproducible Build:</span>
-                    <span className="font-mono text-[#22C55E] text-[11px] flex items-center gap-1">
-                      <Check className="w-3 h-3" /> Attested
+                    <span className="font-mono text-[#31C875] text-[11px] flex items-center gap-1">
+                      <Check className="w-3 h-3" /> Attested L3
                     </span>
                   </div>
                   {result.matchedRelease.revoked?.isRevoked && (
-                    <div className="p-2 bg-[#2E1517] border border-[#EF4444]/30 rounded-[4px] text-[11px] text-[#EF4444] mt-2">
+                    <div className="p-2 bg-[#2E1517] border border-[#E45B5B]/30 rounded-[4px] text-[11px] text-[#E45B5B] mt-2">
                       <strong>Revocation Reason:</strong> {result.matchedRelease.revoked.reason}
                     </div>
                   )}
                 </div>
               ) : (
                 <div className="py-6 text-center text-xs text-[#9A9DA3] space-y-1">
-                  <AlertTriangle className="w-5 h-5 text-[#EAB308] mx-auto mb-1" />
-                  <p className="font-medium text-[#E5E2E3]">No On-Chain Provenance Record</p>
+                  <AlertTriangle className="w-5 h-5 text-[#E4CD19] mx-auto mb-1" />
+                  <p className="font-medium text-[#F0F1F2]">No On-Chain Provenance Record</p>
                   <p className="text-[11px]">
                     This binary is not anchored on the Monad Provenance Registry.
                   </p>
@@ -500,15 +554,15 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
 
           {/* Discrepancies if any */}
           {result.detectedDiscrepancies && result.detectedDiscrepancies.length > 0 && (
-            <div className="p-4 bg-[#151617] border border-[#EF4444]/30 rounded-[8px] space-y-2">
-              <div className="text-xs font-semibold text-[#EF4444] flex items-center gap-1.5">
+            <div className="p-4 bg-[#151617] border border-[#E45B5B]/30 rounded-[8px] space-y-2">
+              <div className="text-xs font-semibold text-[#E45B5B] flex items-center gap-1.5">
                 <AlertTriangle className="w-4 h-4" />
                 Ledger Discrepancies Detected
               </div>
-              <ul className="text-xs font-mono space-y-1 text-[#E5E2E3]">
+              <ul className="text-xs font-mono space-y-1 text-[#F0F1F2]">
                 {result.detectedDiscrepancies.map((d, i) => (
                   <li key={i} className="flex items-start gap-2">
-                    <span className="text-[#EF4444]">•</span>
+                    <span className="text-[#E45B5B]">•</span>
                     <span>{d}</span>
                   </li>
                 ))}
@@ -520,3 +574,5 @@ export function LiveIntegrityView({ onInspectReleaseInDna }: LiveIntegrityViewPr
     </div>
   );
 }
+
+export default LiveIntegrityView;
