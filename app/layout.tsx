@@ -3,9 +3,15 @@ import "./globals.css";
 import { Header } from "@/components/navigation/Header";
 
 export const metadata: Metadata = {
-  title: "SwarmTrace — Torrent Provenance & Verification on Monad",
+  title: "Penguin Trace — Verify software integrity. Trace release provenance.",
   description:
     "Security-focused Web3 verification and forensics layer for peer-to-peer software distribution, backed by Monad.",
+  openGraph: {
+    title: "Penguin Trace — Verify software integrity. Trace release provenance.",
+    description:
+      "Security-focused Web3 verification and forensics layer for peer-to-peer software distribution, backed by Monad.",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
@@ -22,7 +28,7 @@ export default function RootLayout({
         </main>
         <footer className="border-t border-gray-900 py-6 text-center text-xs text-gray-500">
           <p>
-            SwarmTrace · Monad Blitz Hackathon · Monad Testnet (Chain ID 10143) · All file hashing executes locally in-browser.
+            Penguin Trace · Monad Blitz Hackathon · Monad Testnet (Chain ID 10143) · All file hashing executes locally in-browser.
           </p>
         </footer>
       </body>

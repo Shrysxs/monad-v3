@@ -9,7 +9,7 @@ export default function RiskIntelligencePage() {
           <div className="w-8 h-8 rounded-lg bg-emerald-950 border border-emerald-800 flex items-center justify-center text-emerald-400">
             <Activity className="w-4 h-4" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Swarm Risk Intelligence</h1>
+          <h1 className="text-2xl font-bold text-white">Risk Intelligence</h1>
         </div>
         <p className="text-sm text-gray-400">
           Transparent multi-source evidence panel separating publisher provenance from active security inspection, with honest scanner availability reporting.
@@ -22,7 +22,7 @@ export default function RiskIntelligencePage() {
         <AlertTriangle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
         <div>
           <span className="font-semibold text-gray-300">Evidence Policy: </span>
-          When no third-party security scanner is configured, SwarmTrace reports <code className="text-emerald-300 font-mono">SCANNER_UNAVAILABLE</code>. We never fabricate a clean or 0-detection result.
+          When no third-party security scanner is configured, Penguin Trace reports <code className="text-emerald-300 font-mono">SCANNER_UNAVAILABLE</code>. We never fabricate a clean or 0-detection result.
         </div>
       </div>
     </div>

@@ -336,7 +336,7 @@ export function FileVerifier() {
           ) : (
             <>
               <ShieldCheck className="w-4 h-4" />
-              <span>Run Live Swarm Verification</span>
+              <span>Run Live Integrity Verification</span>
             </>
           )}
         </button>

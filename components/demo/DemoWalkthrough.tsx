@@ -144,7 +144,7 @@ export function DemoWalkthrough() {
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <span className="font-bold text-white text-base">SwarmTrace Demo Walkthrough</span>
+              <span className="font-bold text-white text-base">Penguin Trace Demo Walkthrough</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-900/80 text-cyan-300 border border-cyan-700">
                 OFFLINE-CAPABLE
               </span>
@@ -605,7 +605,7 @@ export function DemoWalkthrough() {
                   <div className="p-3.5 rounded-xl bg-gray-950 border border-gray-800 text-xs text-gray-400 space-y-1">
                     <div className="font-semibold text-emerald-400 flex items-center space-x-1.5">
                       <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>SwarmTrace Honesty Guarantee:</span>
+                      <span>Penguin Trace Honesty Guarantee:</span>
                     </div>
                     <p>
                       We strictly separate publisher provenance from malware risk. A valid signature tells you <em>who authored the release</em>. We never present a file as &quot;safe&quot; without active scanner results.

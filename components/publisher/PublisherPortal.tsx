@@ -576,7 +576,7 @@ export function PublisherPortal() {
             </div>
           </div>
           <div className="p-3 rounded-xl bg-gray-950 border border-gray-800 space-y-1">
-            <div className="text-gray-400 font-sans">SwarmTrace Registry Address:</div>
+            <div className="text-gray-400 font-sans">Registry Address (SwarmTraceRegistry):</div>
             <div className="text-purple-300 truncate">
               {isContractConfigured ? contractAddress : "Unset (Awaiting Deployed Address)"}
             </div>

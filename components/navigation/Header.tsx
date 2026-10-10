@@ -8,9 +8,9 @@ export function Header() {
   const pathname = usePathname();
 
   const navItems = [
-    { href: "/verify", label: "Live Swarm Integrity", icon: Shield },
+    { href: "/verify", label: "Live Integrity", icon: Shield },
     { href: "/dna", label: "Release DNA", icon: GitCompare },
-    { href: "/risk", label: "Swarm Risk Intelligence", icon: Activity },
+    { href: "/risk", label: "Risk Intelligence", icon: Activity },
     { href: "/publisher", label: "Publisher Portal", icon: KeyRound },
   ];
 
@@ -20,10 +20,10 @@ export function Header() {
         <div className="flex items-center space-x-8">
           <Link href="/" className="flex items-center space-x-3">
             <div className="w-9 h-9 rounded-lg bg-cyan-600/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold">
-              ST
+              PT
             </div>
             <span className="font-semibold text-lg tracking-tight text-white">
-              Swarm<span className="text-cyan-400">Trace</span>
+              Penguin<span className="text-cyan-400"> Trace</span>
             </span>
           </Link>
 

@@ -14,7 +14,7 @@ export default function HomePage() {
           Know whether a downloaded file matches an authentic release.
         </h1>
         <p className="text-lg text-gray-400 leading-relaxed">
-          SwarmTrace combines local cryptographic file and piece hashing, cross-variant release forensics,
+          Penguin Trace combines local cryptographic file and piece hashing, cross-variant release forensics,
           and explainable security evidence — backed by an auditable publisher release registry on Monad.
         </p>
 
@@ -70,7 +70,7 @@ export default function HomePage() {
             <span className="text-xs text-gray-400">Takes ~3 minutes · No wallet or gas needed</span>
           </div>
           <h2 className="text-xl font-bold text-white">
-            Experience SwarmTrace in action with preloaded cryptographic fixtures
+            Experience Penguin Trace in action with preloaded cryptographic fixtures
           </h2>
           <p className="text-xs text-gray-300 leading-relaxed">
             Step through authentic release verification, 1-byte piece tamper detection, same-filename variant forensics, and transparent scanner availability reporting — all running locally in your browser.
@@ -97,7 +97,7 @@ export default function HomePage() {
               <Shield className="w-5 h-5" />
             </div>
             <h2 className="text-lg font-semibold text-white group-hover:text-cyan-300 transition-colors">
-              Live Swarm Integrity
+              Live Integrity Verification
             </h2>
             <p className="text-xs text-gray-400">
               Verify local file bytes and piece manifests against publisher Ed25519 signatures and Monad release records.

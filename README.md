@@ -1,6 +1,8 @@
-# SwarmTrace
+# Penguin Trace
 
-> **A torrent-native verification and forensics layer that checks downloaded files against authenticated releases, compares suspicious variants, and explains security evidence, backed by an auditable release registry on Monad.**
+> **Verify software integrity. Trace release provenance.**
+
+A security-focused Web3 verification and forensics layer that checks downloaded files against authenticated releases, compares suspicious variants, and explains security evidence, backed by an auditable release registry on Monad.
 
 Built for the **Monad Blitz Hackathon** on **Monad Testnet (Chain ID 10143)**.
 
@@ -10,11 +12,11 @@ Built for the **Monad Blitz Hackathon** on **Monad Testnet (Chain ID 10143)**.
 
 Peer-to-peer distribution is fast and resilient, but torrent tracker listings, swarm peer counts, and filenames do not prove that downloaded software was produced by the legitimate vendor. Cryptographic hashes only detect byte modifications when compared against an authentic, tamper-proof reference.
 
-**SwarmTrace** bridges this trust gap by anchoring publisher authorizations, release commitments, and revocation statuses on **Monad Testnet**. All file hashing occurs client-side in the browser, ensuring file privacy while cryptographically proving integrity against on-chain publisher records.
+**Penguin Trace** bridges this trust gap by anchoring publisher authorizations, release commitments, and revocation statuses on **Monad Testnet**. All file hashing occurs client-side in the browser, ensuring file privacy while cryptographically proving integrity against on-chain publisher records in the deployed `SwarmTraceRegistry` contract.
 
 ### Four Integrated Capabilities
 
-1. **Live Swarm Integrity (`/verify`)**
+1. **Live Integrity (`/verify`)**
    - Client-side whole-file SHA-256 and piece/chunk hashing using the Web Crypto API.
    - Detached **Ed25519 signature verification** against RFC 8785 canonical JSON manifests.
    - Real-time on-chain release querying against `SwarmTraceRegistry` on Monad Testnet.
@@ -25,7 +27,7 @@ Peer-to-peer distribution is fast and resilient, but torrent tracker listings, s
    - Detects repackaged releases, unofficial rebuilds, and version supersession.
    - Monotonic lineage visualization tracking active, superseded, and revoked release lifecycles.
 
-3. **Swarm Risk Intelligence (`/risk`)**
+3. **Risk Intelligence (`/risk`)**
    - Multi-source risk evidence aggregator separating publisher provenance from malware scans.
    - Strictly honest reporting: displays `SCANNER_UNAVAILABLE` or `NOT_SCANNED` rather than pretending scans ran or reporting clean verdicts without evidence.
    - Multi-factor risk scoring with caveats and detailed forensic explanations.
@@ -38,12 +40,12 @@ Peer-to-peer distribution is fast and resilient, but torrent tracker listings, s
 
 ## 2. Core Security & Honesty Guarantees
 
-SwarmTrace adheres to six fundamental security and honesty principles:
+Penguin Trace adheres to six fundamental security and honesty principles:
 
 1. **Integrity $\neq$ Benign:** A matching hash proves byte-level equivalence to the publisher's reference release. It does **not** prove the software is malware-free.
 2. **Mismatch $\neq$ Malware:** A mismatched hash indicates the downloaded bytes differ from the reference (e.g. repacked installer, alternate build, or corrupted download). It does not prove malicious intent.
 3. **Filename $\neq$ Identity:** Filenames are purely informational display hints and are never trusted as identity proof.
-4. **Honest Scanner Reporting:** When no external antivirus/scanner API is active, SwarmTrace explicitly reports `SCANNER_UNAVAILABLE` or `NOT_SCANNED`. We never fabricate a clean or 0-detection result.
+4. **Honest Scanner Reporting:** When no external antivirus/scanner API is active, Penguin Trace explicitly reports `SCANNER_UNAVAILABLE` or `NOT_SCANNED`. We never fabricate a clean or 0-detection result.
 5. **Local File Processing:** File bytes are hashed strictly in the user's browser using the Web Crypto API. File contents are **never** uploaded to any server.
 6. **No Mock Wire Protocol:** We do not claim live BitTorrent wire-protocol monitoring without an active, tested client integration.
 
@@ -184,8 +186,8 @@ After broadcast:
 
 ## 8. Known Limitations & Roadmap
 
-- **BitTorrent Wire Protocol:** SwarmTrace currently processes downloaded payloads and `.torrent` chunk manifests in the browser. Direct TCP/uTP peer wire inspection requires a local native desktop daemon or WebRTC-based torrent client integration.
-- **External Antivirus Integration:** Commercial scanners (e.g. VirusTotal API) require paid API keys and file uploads, which violate zero-knowledge file privacy. SwarmTrace defaults to transparent `SCANNER_UNAVAILABLE` unless an explicit privacy-preserving hash-lookup API is connected.
+- **BitTorrent Wire Protocol:** Penguin Trace currently processes downloaded payloads and `.torrent` chunk manifests in the browser. Direct TCP/uTP peer wire inspection requires a local native desktop daemon or WebRTC-based torrent client integration.
+- **External Antivirus Integration:** Commercial scanners (e.g. VirusTotal API) require paid API keys and file uploads, which violate zero-knowledge file privacy. Penguin Trace defaults to transparent `SCANNER_UNAVAILABLE` unless an explicit privacy-preserving hash-lookup API is connected.
 - **Browser Memory Limits:** In-browser Web Crypto API processing buffers file chunks in memory. Files larger than 2 GB should be verified piece-by-piece or via CLI tools.
 
 ---

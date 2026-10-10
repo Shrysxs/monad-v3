@@ -9,7 +9,7 @@ export default function VerifyPage() {
           <div className="w-8 h-8 rounded-lg bg-cyan-950 border border-cyan-800 flex items-center justify-center text-cyan-400">
             <Shield className="w-4 h-4" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Live Swarm Integrity</h1>
+          <h1 className="text-2xl font-bold text-white">Live Integrity Verification</h1>
         </div>
         <p className="text-sm text-gray-400">
           Verify downloaded files against publisher-signed RFC 8785 manifests, piece hashes, and Monad Testnet release commitments.
