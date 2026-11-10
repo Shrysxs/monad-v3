@@ -78,11 +78,11 @@ export function VariantComparator() {
   async function applyPreset(presetKey: string, items = fixtures) {
     setActivePreset(presetKey);
     const byId = (id: string) => items.find((f) => f.id === id);
-    const authentic = byId("fixture-authentic-ubuntu");
-    const tampered = byId("fixture-tampered-ubuntu");
-    const repacked = byId("fixture-repacked-ubuntu");
-    const revoked = byId("fixture-revoked-monad");
-    const superseded = byId("fixture-superseded-monad");
+    const authentic = byId("fixture-authentic-aurora");
+    const tampered = byId("fixture-tampered-aurora");
+    const repacked = byId("fixture-repacked-aurora");
+    const revoked = byId("fixture-revoked-nimbus");
+    const superseded = byId("fixture-superseded-nimbus");
     if (!authentic || !tampered || !repacked || !revoked || !superseded) return;
 
     // Every preset is built from the real fixture bytes and verified against the demo
@@ -100,12 +100,12 @@ export function VariantComparator() {
 
     const [artA, artB] =
       presetKey === "same-name-different-hash"
-        ? await Promise.all([profile(authentic, "art-authentic-ubuntu"), profile(repacked, "art-repack-untrusted")])
+        ? await Promise.all([profile(authentic, "art-authentic-aurora"), profile(repacked, "art-repack-untrusted")])
         : presetKey === "bit-rot-tampered"
-        ? await Promise.all([profile(authentic, "art-authentic-ubuntu"), profile(tampered, "art-tampered-ubuntu")])
+        ? await Promise.all([profile(authentic, "art-authentic-aurora"), profile(tampered, "art-tampered-aurora")])
         : presetKey === "revoked-evolution"
         ? await Promise.all([profile(superseded, "art-superseded-v0.1.0"), profile(revoked, "art-revoked-v0.2.1")])
-        : await Promise.all([profile(authentic, "art-canonical-node"), profile(authentic, "art-mirror-node")]);
+        : await Promise.all([profile(authentic, "art-original-node"), profile(authentic, "art-mirror-node")]);
 
     setArtifactA(artA);
     setArtifactB(artB);

@@ -198,10 +198,10 @@ An interactive demonstration is available at `/demo` or by clicking **Try Demo**
 
 The demo does not require a Web3 wallet, testnet gas, or external API keys. It runs entirely in memory using pre-computed cryptographic fixtures:
 
-1. **Step 1 (Verify integrity):** Evaluates an authentic Ubuntu image (`ubuntu-24.04-desktop-amd64.iso`) against its signed manifest, verifying full-file SHA-256 and all 7 piece hashes.
+1. **Step 1 (Verify integrity):** Evaluates an authentic image of the fictional "Aurora Linux" (`aurora-24.04-desktop-amd64.iso`) against its signed manifest, verifying full-file SHA-256 and every piece hash.
 2. **Step 2 (Detect tampering):** Evaluates a modified variant of the same file with 1 flipped byte, showing the hash mismatch and isolating the altered piece (#0).
 3. **Step 3 (Explore release history):** Compares two artifacts sharing identical filenames to demonstrate how cryptographic digests distinguish official vendor builds from unverified tracker repacks.
-4. **Step 4 (Inspect risk report):** Displays the multi-source evidence audit, showing 100% provenance confidence alongside an explicit `SCANNER_UNAVAILABLE` notice for malware inspection.
+4. **Step 4 (Inspect risk report):** Displays the multi-source evidence audit, showing the provenance confidence alongside an explicit `SCANNER_UNAVAILABLE` notice for malware inspection.
 
 *Note: All data in `/demo` consists of local test fixtures. They demonstrate the verification workflow but do not represent live on-chain transactions.*
 

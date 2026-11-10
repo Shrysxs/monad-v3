@@ -381,11 +381,11 @@ export async function verifyFileAgainstManifest(
     },
     {
       id: "ev-monad-registry",
-      sourceId: "monad-testnet-registry",
+      sourceId: isDemo ? "demo-registry" : "monad-testnet-registry",
       sourceType: "ONCHAIN_REGISTRY",
-      title: "Monad Release Status",
+      title: isDemo ? "Demo Registry Release Status" : "Monad Release Status",
       description: boundRecord
-        ? `Status: ${onChainStatus} (Registered at block ${boundRecord.blockNumber ?? "latest"})`
+        ? `Status: ${onChainStatus}${boundRecord.blockNumber !== undefined ? ` (registered at block ${boundRecord.blockNumber})` : ""}${isDemo ? " [demo registry]" : ""}`
         : `No release commitment for this manifest found in ${registryLabel}.`,
       status:
         onChainStatus === "ACTIVE"

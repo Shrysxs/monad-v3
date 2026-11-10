@@ -40,7 +40,7 @@ import type {
 
 export function FileVerifier() {
   const [fixtures, setFixtures] = useState<DemoFixtureItem[]>([]);
-  const [selectedFixtureId, setSelectedFixtureId] = useState<string>("fixture-authentic-ubuntu");
+  const [selectedFixtureId, setSelectedFixtureId] = useState<string>("fixture-authentic-aurora");
   const [fileName, setFileName] = useState<string>("");
   // Fixture bytes (small, in memory) or a user-selected File (streamed, never loaded whole)
   const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null);
@@ -653,7 +653,9 @@ export function FileVerifier() {
                   </span>
                 </div>
                 <p className="text-xs text-neutral-600 pl-8">
-                  On-chain lifecycle commitment in PenguinTraceRegistry on Monad Testnet
+                  {verdict.trustSource === "DEMO_FIXTURE"
+                    ? "Lifecycle commitment in the demo registry (local fixtures)"
+                    : "On-chain lifecycle commitment in PenguinTraceRegistry on Monad Testnet"}
                 </p>
               </div>
               <div className="pl-8 sm:pl-0">

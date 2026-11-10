@@ -17,8 +17,8 @@ const profile = (f: DemoFixtureItem) =>
 describe("buildArtifactProfile (Release DNA uses the verification engine)", () => {
   it("authentic vs impostor repack: only the authentic artifact is authenticated", async () => {
     const fx = await getDemoFixtures();
-    const a = await profile(fx.find((f) => f.id === "fixture-authentic-ubuntu")!);
-    const b = await profile(fx.find((f) => f.id === "fixture-repacked-ubuntu")!);
+    const a = await profile(fx.find((f) => f.id === "fixture-authentic-aurora")!);
+    const b = await profile(fx.find((f) => f.id === "fixture-repacked-aurora")!);
 
     expect(a.authenticated).toBe(true);
     expect(b.authenticated).toBe(false);
@@ -32,8 +32,8 @@ describe("buildArtifactProfile (Release DNA uses the verification engine)", () =
 
   it("tampered copy: not authenticated, record not attached, one piece differs", async () => {
     const fx = await getDemoFixtures();
-    const a = await profile(fx.find((f) => f.id === "fixture-authentic-ubuntu")!);
-    const b = await profile(fx.find((f) => f.id === "fixture-tampered-ubuntu")!);
+    const a = await profile(fx.find((f) => f.id === "fixture-authentic-aurora")!);
+    const b = await profile(fx.find((f) => f.id === "fixture-tampered-aurora")!);
 
     expect(b.authenticated).toBe(false);
     expect(b.releaseRecord).toBeUndefined();

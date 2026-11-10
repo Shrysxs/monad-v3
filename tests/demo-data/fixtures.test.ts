@@ -26,12 +26,12 @@ describe("Demo Data Fixtures", () => {
   });
 
   it.each([
-    ["fixture-authentic-ubuntu", "MATCHING_AUTHENTICATED_RELEASE"],
-    ["fixture-tampered-ubuntu", "HASH_MISMATCH"],
-    ["fixture-repacked-ubuntu", "INVALID_MANIFEST_SIGNATURE"],
-    ["fixture-revoked-monad", "REVOKED_RELEASE"],
-    ["fixture-superseded-monad", "SUPERSEDED_RELEASE"],
-    ["fixture-prerotation-monad", "MATCHING_AUTHENTICATED_RELEASE"],
+    ["fixture-authentic-aurora", "MATCHING_AUTHENTICATED_RELEASE"],
+    ["fixture-tampered-aurora", "HASH_MISMATCH"],
+    ["fixture-repacked-aurora", "INVALID_MANIFEST_SIGNATURE"],
+    ["fixture-revoked-nimbus", "REVOKED_RELEASE"],
+    ["fixture-superseded-nimbus", "SUPERSEDED_RELEASE"],
+    ["fixture-prerotation-nimbus", "MATCHING_AUTHENTICATED_RELEASE"],
   ])("%s produces %s", async (id, expected) => {
     const fixture = (await getDemoFixtures()).find((f) => f.id === id)!;
     const verdict = await verifyFixture(fixture);
@@ -40,7 +40,7 @@ describe("Demo Data Fixtures", () => {
   });
 
   it("repacked fixture is unregistered and signed by a non-registered key", async () => {
-    const repack = (await getDemoFixtures()).find((f) => f.id === "fixture-repacked-ubuntu")!;
+    const repack = (await getDemoFixtures()).find((f) => f.id === "fixture-repacked-aurora")!;
     expect(repack.releaseRecord).toBeUndefined();
     const verdict = await verifyFixture(repack);
     expect(verdict.signatureVerification.isValid).toBe(false);
@@ -48,7 +48,7 @@ describe("Demo Data Fixtures", () => {
 
   it("verifies authentic fixture matches cleanly", async () => {
     const fixtures = await getDemoFixtures();
-    const authentic = fixtures.find((f) => f.id === "fixture-authentic-ubuntu")!;
+    const authentic = fixtures.find((f) => f.id === "fixture-authentic-aurora")!;
 
     const verdict = await verifyFileAgainstManifest({
       fileBytes: authentic.fileBytes,
@@ -65,7 +65,7 @@ describe("Demo Data Fixtures", () => {
 
   it("verifies tampered fixture triggers HASH_MISMATCH", async () => {
     const fixtures = await getDemoFixtures();
-    const tampered = fixtures.find((f) => f.id === "fixture-tampered-ubuntu")!;
+    const tampered = fixtures.find((f) => f.id === "fixture-tampered-aurora")!;
 
     const verdict = await verifyFileAgainstManifest({
       fileBytes: tampered.fileBytes,

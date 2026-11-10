@@ -57,9 +57,9 @@ export function DemoWalkthrough() {
         const items = await getDemoFixtures();
         setFixtures(items);
 
-        const authentic = items.find((f) => f.id === "fixture-authentic-ubuntu") ?? items[0];
-        const tampered = items.find((f) => f.id === "fixture-tampered-ubuntu") ?? items[1];
-        const repacked = items.find((f) => f.id === "fixture-repacked-ubuntu") ?? items[2];
+        const authentic = items.find((f) => f.id === "fixture-authentic-aurora") ?? items[0];
+        const tampered = items.find((f) => f.id === "fixture-tampered-aurora") ?? items[1];
+        const repacked = items.find((f) => f.id === "fixture-repacked-aurora") ?? items[2];
 
         if (authentic) {
           const v1 = await verifyFileAgainstManifest({
@@ -76,6 +76,7 @@ export function DemoWalkthrough() {
             fileIntegrity: v1.fileIntegrity,
             signatureVerification: v1.signatureVerification,
             releaseRecord: v1.releaseRecord,
+            trustSource: "DEMO_FIXTURE",
             scannerConfig: { enabled: false },
           });
           setStep4Report(r4);
@@ -232,7 +233,7 @@ export function DemoWalkthrough() {
                   </h3>
                 </div>
                 <span className="text-xs font-mono text-neutral-600">
-                  Target: <span className="text-neutral-950 font-bold">ubuntu-24.04-desktop-amd64.iso</span>
+                  Target: <span className="text-neutral-950 font-bold">aurora-24.04-desktop-amd64.iso</span>
                 </span>
               </div>
 
@@ -269,7 +270,7 @@ export function DemoWalkthrough() {
                         {step1Verdict.fileIntegrity.expectedSha256}
                       </div>
                       <div className="text-neutral-500 font-sans text-[10px] pt-1 border-t border-neutral-900">
-                        Signed by: canonical-ubuntu
+                        Signed by: com.example.aurora
                       </div>
                     </div>
                   </div>
@@ -282,7 +283,7 @@ export function DemoWalkthrough() {
                         <span>Piece Checksum Verification</span>
                       </span>
                       <span className="font-mono text-emerald-800 font-bold text-[11px] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                        7 of 7 pieces verified (100% match)
+                        {step1Verdict.fileIntegrity.chunksMatched ?? 0} of {step1Verdict.fileIntegrity.chunksTotal ?? 0} pieces verified
                       </span>
                     </div>
 
@@ -323,7 +324,7 @@ export function DemoWalkthrough() {
                   </h3>
                 </div>
                 <span className="text-xs font-mono text-neutral-600">
-                  Target: <span className="text-neutral-950 font-bold">ubuntu-24.04-desktop-amd64.iso (Altered)</span>
+                  Target: <span className="text-neutral-950 font-bold">aurora-24.04-desktop-amd64.iso (Altered)</span>
                 </span>
               </div>
 
@@ -373,7 +374,12 @@ export function DemoWalkthrough() {
                         <span>Piece Tamper Localization</span>
                       </span>
                       <span className="font-mono text-red-800 font-bold text-[11px] bg-red-50 px-2 py-0.5 rounded border border-red-200">
-                        Piece #0 corrupted · 6 of 7 pieces matched
+                        {(step2Verdict.fileIntegrity.chunkDetails ?? [])
+                          .filter((c) => c.status === "MISMATCH")
+                          .map((c) => `Piece #${c.chunkIndex}`)
+                          .join(", ") || "No piece"}{" "}
+                        corrupted · {step2Verdict.fileIntegrity.chunksMatched ?? 0} of{" "}
+                        {step2Verdict.fileIntegrity.chunksTotal ?? 0} pieces matched
                       </span>
                     </div>
 
@@ -442,8 +448,8 @@ export function DemoWalkthrough() {
                         </span>
                       </div>
                       <div className="space-y-1 font-mono text-[11px] text-neutral-700">
-                        <div>Filename: ubuntu-24.04-desktop-amd64.iso</div>
-                        <div>Publisher: canonical-ubuntu</div>
+                        <div>Filename: aurora-24.04-desktop-amd64.iso</div>
+                        <div>Publisher: com.example.aurora</div>
                         <div className="truncate text-neutral-500">SHA: {step3Comparison.artifactA.sha256}</div>
                       </div>
                     </div>
@@ -456,7 +462,7 @@ export function DemoWalkthrough() {
                         </span>
                       </div>
                       <div className="space-y-1 font-mono text-[11px] text-neutral-700">
-                        <div>Filename: ubuntu-24.04-desktop-amd64.iso</div>
+                        <div>Filename: aurora-24.04-desktop-amd64.iso</div>
                         <div>Publisher: Unauthenticated mirror</div>
                         <div className="truncate text-neutral-500">SHA: {step3Comparison.artifactB.sha256}</div>
                       </div>
@@ -496,14 +502,16 @@ export function DemoWalkthrough() {
                   <div className="grid sm:grid-cols-3 gap-3 text-xs">
                     <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 space-y-1">
                       <div className="text-neutral-500 font-mono text-[10px] uppercase">Provenance Confidence:</div>
-                      <div className="text-base font-bold text-emerald-800">100% AUTHENTIC</div>
-                      <div className="text-[10px] text-neutral-600">Valid Ed25519 signature verified.</div>
+                      <div className="text-base font-bold text-emerald-800">{step4Report.provenanceScore}%</div>
+                      <div className="text-[10px] text-neutral-600">{step4Report.assessmentTitle}</div>
                     </div>
 
                     <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 space-y-1">
                       <div className="text-neutral-500 font-mono text-[10px] uppercase">Integrity Check:</div>
                       <div className="text-base font-bold text-emerald-800">EXACT MATCH</div>
-                      <div className="text-[10px] text-neutral-600">SHA-256 + 7 pieces matched.</div>
+                      <div className="text-[10px] text-neutral-600">
+                        SHA-256 + {step1Verdict?.fileIntegrity.chunksMatched ?? 0} pieces matched.
+                      </div>
                     </div>
 
                     <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 space-y-1">
