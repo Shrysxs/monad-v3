@@ -12,7 +12,7 @@ The application computes file digests locally in the browser, checks detached Ed
 - **Detached signature verification:** Validates publisher Ed25519 signatures against RFC 8785 JSON Canonicalization Scheme (JCS) release manifests.
 - **Piece-level tamper localization:** Matches individual piece hashes against manifest declarations to pinpoint altered or corrupted byte ranges.
 - **On-chain release commitments:** Queries an EVM registry contract on Monad Testnet for publisher authorization, version lineage, and revocation status.
-- **Variant forensics (Release DNA):** Compares two artifacts that share the same filename to determine whether they share an origin, represent distinct builds, or indicate an untrusted repack.
+- **Compare files:** Compares two artifacts that share the same filename to determine whether they share an origin, represent distinct builds, or indicate an untrusted repack.
 - **Honest evidence reporting:** Separates publisher identity from runtime safety. When no antivirus or external scanner is configured, the tool reports `SCANNER_UNAVAILABLE` rather than fabricating a clean result.
 
 ## How verification works
@@ -207,18 +207,16 @@ npm run typecheck   # TypeScript compiler check (tsc --noEmit)
 npm run lint        # ESLint verification
 ```
 
-## Demo walkthrough
+## Using the app
 
-An interactive demonstration is available at `/demo` or by clicking **Try Demo** in the navigation header.
+| Page | What it's for |
+|---|---|
+| **Check a file** (`/verify`) | Add a downloaded file and the publisher's `.json` signature file, and get a plain answer: genuine, changed, fake signature, withdrawn, or out of date, plus what to do next. Technical details (fingerprints, piece map, step log) are folded away. |
+| **Compare files** (`/dna`) | Two files with the same name: are they identical, two versions, or is one a fake? |
+| **For publishers** (`/publisher`) | Sign a release, publish it on Monad, withdraw a release, look one up, and (admin) approve publishers. |
+| **Try the demo** (`/demo`) | A four-step story with made-up sample files: a genuine download, a tampered one, a fake with the same name, and a withdrawn release. No wallet or files needed. |
 
-The demo does not require a Web3 wallet, testnet gas, or external API keys. It runs entirely in memory using pre-computed cryptographic fixtures:
-
-1. **Step 1 (Verify integrity):** Evaluates an authentic image of the fictional "Aurora Linux" (`aurora-24.04-desktop-amd64.iso`) against its signed manifest, verifying full-file SHA-256 and every piece hash.
-2. **Step 2 (Detect tampering):** Evaluates a modified variant of the same file with 1 flipped byte, showing the hash mismatch and isolating the altered piece (#0).
-3. **Step 3 (Explore release history):** Compares two artifacts sharing identical filenames to demonstrate how cryptographic digests distinguish official vendor builds from unverified tracker repacks.
-4. **Step 4 (Inspect risk report):** Displays the multi-source evidence audit, showing the provenance confidence alongside an explicit `SCANNER_UNAVAILABLE` notice for malware inspection.
-
-*Note: All data in `/demo` consists of local test fixtures. They demonstrate the verification workflow but do not represent live on-chain transactions.*
+Every page also offers made-up sample files, always labelled "Sample data". Results from samples never claim to come from Monad Testnet.
 
 ## Limitations
 

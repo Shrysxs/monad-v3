@@ -2,91 +2,255 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  GitCompare,
-  Check,
-  X,
-  AlertTriangle,
   Upload,
-  Search,
-  Copy,
-  CheckCheck,
-  ExternalLink,
-  Info,
+  FileCheck2,
+  FileJson,
   RefreshCw,
+  ChevronDown,
+  X,
+  Sparkles,
+  Equal,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  HelpCircle,
 } from "lucide-react";
-import {
-  compareArtifacts,
-  type ArtifactProfile,
-  type ReleaseDnaComparison,
-} from "@/lib/risk/release-dna";
-import {
-  getDemoFixtures,
-  type DemoFixtureItem,
-} from "@/lib/demo-data/fixtures";
+import { compareArtifacts, type ArtifactProfile, type ReleaseDnaComparison } from "@/lib/risk/release-dna";
+import { getDemoFixtures, type DemoFixtureItem } from "@/lib/demo-data/fixtures";
 import { buildArtifactProfile } from "@/lib/risk/artifact-profile";
 import { hashFile } from "@/lib/crypto/hash-file";
-import type { ReleaseRecord } from "@/lib/verification/types";
 import { parseAndValidateManifest } from "@/lib/manifests/manifest";
-import {
-  fetchOnChainRelease,
-  resolveRegistryTrustAnchors,
-  getRegistryAddress,
-} from "@/lib/chain/contract";
+import { resolveRegistryTrustAnchors } from "@/lib/chain/contract";
+import type { ReleaseLifecycleStatus } from "@/lib/verification/types";
 import { LineageTimeline } from "./LineageTimeline";
 
-export function VariantComparator() {
-  const [mode, setMode] = useState<"demo" | "live">("demo");
-  const [fixtures, setFixtures] = useState<DemoFixtureItem[]>([]);
-  const [comparison, setComparison] = useState<ReleaseDnaComparison | null>(null);
+const SAMPLES: { key: string; label: string; a: string; b: string }[] = [
+  { key: "impostor", label: "Real file vs. impostor copy with the same name", a: "fixture-authentic-aurora", b: "fixture-repacked-aurora" },
+  { key: "corrupted", label: "Real file vs. corrupted copy", a: "fixture-authentic-aurora", b: "fixture-tampered-aurora" },
+  { key: "withdrawn", label: "Older version vs. withdrawn version", a: "fixture-superseded-nimbus", b: "fixture-revoked-nimbus" },
+  { key: "identical", label: "Two identical copies", a: "fixture-authentic-aurora", b: "fixture-authentic-aurora" },
+];
 
-  const [artifactA, setArtifactA] = useState<ArtifactProfile | null>(null);
-  const [artifactB, setArtifactB] = useState<ArtifactProfile | null>(null);
-  const [activePreset, setActivePreset] = useState<string>("same-name-different-hash");
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+type Tone = "good" | "warn" | "bad" | "neutral";
 
-  // Live input states
-  const [inputAFile, setInputAFile] = useState<File | null>(null);
-  const [inputAManifestText, setInputAManifestText] = useState<string>("");
-  const [inputAHashOrDigest, setInputAHashOrDigest] = useState<string>("");
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
 
-  const [inputBFile, setInputBFile] = useState<File | null>(null);
-  const [inputBManifestText, setInputBManifestText] = useState<string>("");
-  const [inputBHashOrDigest, setInputBHashOrDigest] = useState<string>("");
+const STATUS_TEXT: Record<ReleaseLifecycleStatus, string> = {
+  ACTIVE: "Current release",
+  SUPERSEDED: "Older version",
+  REVOKED: "Withdrawn by publisher",
+  UNKNOWN: "Not registered",
+};
 
-  const [isProcessingLive, setIsProcessingLive] = useState<boolean>(false);
-  const [liveErrorMessage, setLiveErrorMessage] = useState<string | null>(null);
-
-  const registryAddress = getRegistryAddress();
-
-  function copyText(key: string, text: string) {
-    navigator.clipboard.writeText(text);
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey(null), 2000);
+/** Plain-language headline for a comparison. */
+function describeComparison(c: ReleaseDnaComparison): { tone: Tone; title: string; text: string } {
+  const { diff } = c;
+  switch (c.relationship) {
+    case "REVOKED_VARIANT": {
+      const which =
+        diff.statusA === "REVOKED" && diff.statusB === "REVOKED" ? "Both files are" : diff.statusA === "REVOKED" ? "File A is" : "File B is";
+      return { tone: "bad", title: "One of these was withdrawn", text: `${which} from a release the publisher withdrew. Don't use it.` };
+    }
+    case "EXACT_MATCH":
+      return { tone: "good", title: "These are the same file", text: "They're identical, byte for byte." };
+    case "SUPERSEDED_VARIANT":
+      return {
+        tone: "warn",
+        title: "One is an older version",
+        text: diff.onChainLineageVerified
+          ? `File ${diff.onChainPredecessor === "A" ? "B" : "A"} is the newer release that replaced the other.`
+          : "Both are real releases, but one has been replaced by a newer version.",
+      };
+    case "VERSION_UPDATE":
+      return {
+        tone: "good",
+        title: "Two versions of the same software",
+        text: `Both are genuine releases from the same publisher (versions ${diff.versionA} and ${diff.versionB}).`,
+      };
+    case "SAME_NAME_DIFFERENT_HASH":
+      return {
+        tone: "bad",
+        title: "Same name, different files",
+        text:
+          diff.authenticatedA !== diff.authenticatedB
+            ? `They share a name but have different contents. Only File ${diff.authenticatedA ? "A" : "B"} is the publisher's real release.`
+            : "They share a name but have different contents. A file name alone proves nothing about where a file came from.",
+      };
+    default:
+      return {
+        tone: "neutral",
+        title: "We can't tell how these are related",
+        text: "Neither file could be linked to a registered publisher, so their relationship can't be confirmed.",
+      };
   }
+}
+
+const TONE_BOX: Record<Tone, { box: string; icon: React.ReactNode }> = {
+  good: { box: "bg-emerald-50 border-emerald-300 text-emerald-950", icon: <CheckCircle2 className="w-8 h-8 text-emerald-600 shrink-0" /> },
+  warn: { box: "bg-amber-50 border-amber-300 text-amber-950", icon: <AlertTriangle className="w-8 h-8 text-amber-600 shrink-0" /> },
+  bad: { box: "bg-red-50 border-red-300 text-red-950", icon: <XCircle className="w-8 h-8 text-red-600 shrink-0" /> },
+  neutral: { box: "bg-neutral-50 border-neutral-300 text-neutral-900", icon: <HelpCircle className="w-8 h-8 text-neutral-500 shrink-0" /> },
+};
+
+interface Slot {
+  file: File | null;
+  signature: { name: string; text: string } | null;
+}
+
+function FileSlot({ title, slot, onChange }: { title: string; slot: Slot; onChange: (s: Slot) => void }) {
+  const id = title.replace(/\s+/g, "-").toLowerCase();
+  const box = (filled: boolean) =>
+    `flex items-center gap-3 rounded-xl border-2 border-dashed p-4 cursor-pointer transition-colors ${
+      filled ? "border-emerald-300 bg-emerald-50/50" : "border-neutral-300 hover:border-neutral-500 bg-neutral-50/60"
+    }`;
+  return (
+    <div className="space-y-2">
+      <div className="text-sm font-semibold text-neutral-950">{title}</div>
+      <label htmlFor={`${id}-file`} className={box(!!slot.file)}>
+        <input
+          id={`${id}-file`}
+          type="file"
+          className="hidden"
+          onChange={(e) => e.target.files?.[0] && onChange({ ...slot, file: e.target.files[0] })}
+        />
+        {slot.file ? <FileCheck2 className="w-5 h-5 text-emerald-600 shrink-0" /> : <Upload className="w-5 h-5 text-neutral-600 shrink-0" />}
+        <span className="min-w-0 text-sm">
+          <span className="block font-medium text-neutral-950 truncate">{slot.file ? slot.file.name : "Choose a file"}</span>
+          <span className="block text-xs text-neutral-500">{slot.file ? formatBytes(slot.file.size) : "Stays on your computer"}</span>
+        </span>
+      </label>
+      <label htmlFor={`${id}-sig`} className={box(!!slot.signature)}>
+        <input
+          id={`${id}-sig`}
+          type="file"
+          accept=".json,application/json"
+          className="hidden"
+          onChange={async (e) => {
+            const f = e.target.files?.[0];
+            if (f) onChange({ ...slot, signature: { name: f.name, text: await f.text() } });
+          }}
+        />
+        <FileJson className={`w-5 h-5 shrink-0 ${slot.signature ? "text-emerald-600" : "text-neutral-600"}`} />
+        <span className="min-w-0 text-sm">
+          <span className="block font-medium text-neutral-950 truncate">
+            {slot.signature ? slot.signature.name : "Add its signature file (optional)"}
+          </span>
+          <span className="block text-xs text-neutral-500">Needed to tell which file is genuine</span>
+        </span>
+      </label>
+    </div>
+  );
+}
+
+function ArtifactSummary({ label, a }: { label: string; a: ArtifactProfile }) {
+  const status = a.releaseRecord?.status ?? "UNKNOWN";
+  return (
+    <div className="rounded-xl border border-neutral-200 p-4 space-y-2 min-w-0">
+      <div className="text-xs text-neutral-500">{label}</div>
+      <div className="font-medium text-neutral-950 truncate">{a.fileName}</div>
+      <div className="text-xs text-neutral-500">{formatBytes(a.fileSize)}</div>
+      <div className="flex flex-wrap gap-1.5 pt-1">
+        <span
+          className={`text-xs px-2 py-0.5 rounded-full border ${
+            a.authenticated ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-neutral-50 text-neutral-600 border-neutral-200"
+          }`}
+        >
+          {a.authenticated ? `Genuine · ${a.manifest?.publisherId}` : a.manifest ? "Publisher not confirmed" : "No signature file"}
+        </span>
+        <span
+          className={`text-xs px-2 py-0.5 rounded-full border ${
+            status === "REVOKED"
+              ? "bg-red-50 text-red-800 border-red-200"
+              : status === "ACTIVE"
+              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+              : "bg-neutral-50 text-neutral-600 border-neutral-200"
+          }`}
+        >
+          {STATUS_TEXT[status]}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export function VariantComparator() {
+  const [fixtures, setFixtures] = useState<DemoFixtureItem[]>([]);
+  const [slotA, setSlotA] = useState<Slot>({ file: null, signature: null });
+  const [slotB, setSlotB] = useState<Slot>({ file: null, signature: null });
+  const [comparison, setComparison] = useState<ReleaseDnaComparison | null>(null);
+  const [isSample, setIsSample] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadFixtures() {
-      const items = await getDemoFixtures();
-      setFixtures(items);
-      if (items.length > 0) {
-        void applyPreset("same-name-different-hash", items);
-      }
-    }
-    loadFixtures();
+    getDemoFixtures().then(setFixtures).catch(() => setFixtures([]));
   }, []);
 
-  async function applyPreset(presetKey: string, items = fixtures) {
-    setActivePreset(presetKey);
-    const byId = (id: string) => items.find((f) => f.id === id);
-    const authentic = byId("fixture-authentic-aurora");
-    const tampered = byId("fixture-tampered-aurora");
-    const repacked = byId("fixture-repacked-aurora");
-    const revoked = byId("fixture-revoked-nimbus");
-    const superseded = byId("fixture-superseded-nimbus");
-    if (!authentic || !tampered || !repacked || !revoked || !superseded) return;
+  function update(setter: (s: Slot) => void) {
+    return (s: Slot) => {
+      setter(s);
+      setComparison(null);
+      setIsSample(false);
+      setError(null);
+    };
+  }
 
-    // Every preset is built from the real fixture bytes and verified against the demo
-    // registry, exactly like a user-supplied file would be.
+  async function profileFromSlot(label: string, slot: Slot): Promise<ArtifactProfile> {
+    const id = label.toLowerCase().replace(/\s+/g, "-");
+    let manifest = undefined;
+    let manifestDigest: string | undefined;
+    if (slot.signature) {
+      const parsed = await parseAndValidateManifest(slot.signature.text);
+      if (!parsed.valid) throw new Error(`${label}: that signature file isn't valid. ${parsed.message}`);
+      manifest = parsed.manifest;
+      manifestDigest = parsed.manifestDigest;
+    }
+    const chunkSize = manifest && Number.isSafeInteger(manifest.chunkSize) ? manifest.chunkSize : undefined;
+    const fileDigest = await hashFile(slot.file!, { chunkSize });
+    if (!manifest || !manifestDigest) {
+      return buildArtifactProfile({ id, fileName: slot.file!.name, fileDigest });
+    }
+    // Publisher key and release status come from the registry, never from the signature file.
+    const anchors = await resolveRegistryTrustAnchors(manifest, manifestDigest);
+    return buildArtifactProfile({
+      id,
+      fileName: slot.file!.name,
+      fileDigest,
+      manifest,
+      publisher: anchors.publisher,
+      onChainRecord: anchors.releaseRecord,
+      trustSource: "MONAD_TESTNET",
+    });
+  }
+
+  async function handleCompare() {
+    if (!slotA.file || !slotB.file) {
+      setError("Choose both files to compare.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const [a, b] = await Promise.all([profileFromSlot("File A", slotA), profileFromSlot("File B", slotB)]);
+      setComparison(compareArtifacts(a, b));
+      setIsSample(false);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadSample(key: string) {
+    const sample = SAMPLES.find((s) => s.key === key);
+    const fa = fixtures.find((f) => f.id === sample?.a);
+    const fb = fixtures.find((f) => f.id === sample?.b);
+    if (!sample || !fa || !fb) return;
     const profile = (f: DemoFixtureItem, id: string) =>
       buildArtifactProfile({
         id,
@@ -97,612 +261,120 @@ export function VariantComparator() {
         onChainRecord: f.releaseRecord,
         trustSource: "DEMO_FIXTURE",
       });
-
-    const [artA, artB] =
-      presetKey === "same-name-different-hash"
-        ? await Promise.all([profile(authentic, "art-authentic-aurora"), profile(repacked, "art-repack-untrusted")])
-        : presetKey === "bit-rot-tampered"
-        ? await Promise.all([profile(authentic, "art-authentic-aurora"), profile(tampered, "art-tampered-aurora")])
-        : presetKey === "revoked-evolution"
-        ? await Promise.all([profile(superseded, "art-superseded-v0.1.0"), profile(revoked, "art-revoked-v0.2.1")])
-        : await Promise.all([profile(authentic, "art-original-node"), profile(authentic, "art-mirror-node")]);
-
-    setArtifactA(artA);
-    setArtifactB(artB);
-    setComparison(compareArtifacts(artA, artB));
+    const [a, b] = await Promise.all([profile(fa, "sample-a"), profile(fb, "sample-b")]);
+    setSlotA({ file: null, signature: null });
+    setSlotB({ file: null, signature: null });
+    setComparison(compareArtifacts(a, b));
+    setIsSample(true);
+    setError(null);
   }
 
-  async function resolveArtifact(
-    label: string,
-    file: File | null,
-    manifestText: string,
-    hashOrDigest: string
-  ): Promise<ArtifactProfile> {
-    const id = `live-${label.toLowerCase().replace(/\s+/g, "-")}`;
-    let parsed: Awaited<ReturnType<typeof parseAndValidateManifest>> | null = null;
-    if (manifestText.trim()) {
-      parsed = await parseAndValidateManifest(manifestText);
-      if (!parsed.valid) {
-        throw new Error(`${label}: ${parsed.message}`);
-      }
-    }
-    // Stream the file in a worker, with the manifest's piece size when there is one.
-    const chunkSize =
-      parsed?.valid && Number.isSafeInteger(parsed.manifest.chunkSize) ? parsed.manifest.chunkSize : undefined;
-    const fileDigest = file ? await hashFile(file, { chunkSize }) : undefined;
-
-    if (parsed?.valid) {
-      // Publisher key and release record come from the registry, never from the manifest.
-      const anchors = await resolveRegistryTrustAnchors(parsed.manifest, parsed.manifestDigest);
-      return buildArtifactProfile({
-        id,
-        fileName: file?.name ?? parsed.manifest.fileName,
-        fileDigest,
-        manifest: parsed.manifest,
-        publisher: anchors.publisher,
-        onChainRecord: anchors.releaseRecord,
-        trustSource: "MONAD_TESTNET",
-      });
-    }
-
-    if (fileDigest) {
-      return buildArtifactProfile({ id, fileName: file!.name, fileDigest });
-    }
-
-    // Only a hash/digest was typed: try it as an exact release digest.
-    const cleanInput = hashOrDigest.trim().toLowerCase().replace(/^0x/, "");
-    if (!/^[0-9a-f]{64}$/.test(cleanInput)) {
-      throw new Error(`Please provide a file, manifest, or 64-character hash for ${label}.`);
-    }
-    let record: ReleaseRecord | null = null;
-    try {
-      record = await fetchOnChainRelease(`0x${cleanInput}`);
-    } catch {
-      // Registry unreachable: compare by hash only
-    }
-    return {
-      id,
-      fileName: `${label} (${cleanInput.slice(0, 8)}...)`,
-      fileSize: 0,
-      sha256: record ? record.fileHash.replace(/^0x/, "") : cleanInput,
-      releaseRecord: record ?? undefined,
-      authenticated: false,
-      isDemo: false,
-    };
-  }
-
-  async function handleCompareLiveArtifacts(e: React.FormEvent) {
-    e.preventDefault();
-    setIsProcessingLive(true);
-    setLiveErrorMessage(null);
-
-    try {
-      const artA = await resolveArtifact(
-        "Artifact A",
-        inputAFile,
-        inputAManifestText,
-        inputAHashOrDigest
-      );
-      const artB = await resolveArtifact(
-        "Artifact B",
-        inputBFile,
-        inputBManifestText,
-        inputBHashOrDigest
-      );
-
-      setArtifactA(artA);
-      setArtifactB(artB);
-      setComparison(compareArtifacts(artA, artB));
-    } catch (err: any) {
-      setLiveErrorMessage(err.message || "Failed to compare artifacts");
-    } finally {
-      setIsProcessingLive(false);
-    }
-  }
-
-  function formatBytes(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
+  const headline = comparison ? describeComparison(comparison) : null;
+  const chunk = comparison?.diff.chunkDiff;
 
   return (
     <div className="space-y-6">
-      {/* Mode Selector Tabs */}
-      <div className="flex border-b border-neutral-200 space-x-2">
+      <div className="rounded-2xl border border-neutral-200 bg-white p-5 sm:p-6 shadow-sm space-y-5">
+        <div className="grid sm:grid-cols-2 gap-5">
+          <FileSlot title="File A" slot={slotA} onChange={update(setSlotA)} />
+          <FileSlot title="File B" slot={slotB} onChange={update(setSlotB)} />
+        </div>
         <button
           type="button"
-          onClick={() => {
-            setMode("demo");
-            void applyPreset("same-name-different-hash");
-          }}
-          className={`px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all ${
-            mode === "demo"
-              ? "bg-neutral-950 text-white shadow-sm"
-              : "text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100"
-          }`}
+          onClick={handleCompare}
+          disabled={busy || !slotA.file || !slotB.file}
+          className="w-full py-3.5 rounded-xl bg-neutral-950 hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-500 text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2"
         >
-          Sample forensic comparisons
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setMode("live");
-            setComparison(null);
-          }}
-          className={`px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all ${
-            mode === "live"
-              ? "bg-neutral-950 text-white shadow-sm"
-              : "text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100"
-          }`}
-        >
-          Live on-chain lookup
+          {busy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Equal className="w-4 h-4" />}
+          {busy ? "Comparing..." : "Compare files"}
         </button>
       </div>
 
-      {/* Preset selector for demo mode */}
-      {mode === "demo" && (
-        <div className="p-4 rounded-xl border border-neutral-200 bg-neutral-50 space-y-2.5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider">
-              Sample Forensic Scenarios (Demo Data):
-            </span>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => void applyPreset("same-name-different-hash")}
-              className={`px-3 py-1.5 rounded text-xs transition-all ${
-                activePreset === "same-name-different-hash"
-                  ? "bg-neutral-950 text-white font-medium shadow-sm"
-                  : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-100 hover:text-neutral-950"
-              }`}
-            >
-              Same name, different hash (Untrusted repack)
-            </button>
-
-            <button
-              type="button"
-              onClick={() => void applyPreset("bit-rot-tampered")}
-              className={`px-3 py-1.5 rounded text-xs transition-all ${
-                activePreset === "bit-rot-tampered"
-                  ? "bg-neutral-950 text-white font-medium shadow-sm"
-                  : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-100 hover:text-neutral-950"
-              }`}
-            >
-              1-piece modification (Chunk diff)
-            </button>
-
-            <button
-              type="button"
-              onClick={() => void applyPreset("revoked-evolution")}
-              className={`px-3 py-1.5 rounded text-xs transition-all ${
-                activePreset === "revoked-evolution"
-                  ? "bg-neutral-950 text-white font-medium shadow-sm"
-                  : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-100 hover:text-neutral-950"
-              }`}
-            >
-              Version evolution &amp; revocation
-            </button>
-
-            <button
-              type="button"
-              onClick={() => void applyPreset("exact-match")}
-              className={`px-3 py-1.5 rounded text-xs transition-all ${
-                activePreset === "exact-match"
-                  ? "bg-neutral-950 text-white font-medium shadow-sm"
-                  : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-100 hover:text-neutral-950"
-              }`}
-            >
-              Exact mirror match
-            </button>
-          </div>
+      {fixtures.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-sm text-neutral-600">
+          <Sparkles className="w-4 h-4 text-neutral-500" />
+          <span>No files handy? Try a sample:</span>
+          <select
+            value=""
+            onChange={(e) => void loadSample(e.target.value)}
+            className="w-full sm:w-auto max-w-full rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5 text-sm text-neutral-900 focus:outline-none focus:border-neutral-950"
+          >
+            <option value="" disabled>
+              Choose a sample…
+            </option>
+            {SAMPLES.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.label}
+              </option>
+            ))}
+          </select>
         </div>
       )}
 
-      {/* Mode: Live On-Chain Lookup */}
-      {mode === "live" && (
-        <form onSubmit={handleCompareLiveArtifacts} className="space-y-6">
-          {/* Empty State Banner explaining registry is newly deployed */}
-          <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 text-xs space-y-2 shadow-sm">
-            <div className="font-bold text-neutral-950 flex items-center space-x-2 font-mono uppercase tracking-wider">
-              <Info className="w-4 h-4 text-neutral-700" />
-              <span>Monad Testnet Registry Status</span>
-            </div>
-            <p className="text-neutral-600 leading-relaxed">
-              The live contract at <code className="text-neutral-950 font-mono bg-neutral-200/60 px-1.5 py-0.5 rounded">{registryAddress.slice(0, 10)}...{registryAddress.slice(-6)}</code> currently has no public release records registered. You can query custom hashes below, or{" "}
-              <button
-                type="button"
-                onClick={() => {
-                  setMode("demo");
-                  void applyPreset("same-name-different-hash");
-                }}
-                className="text-neutral-950 font-bold underline hover:no-underline"
-              >
-                load sample data to preview comparison forensics
-              </button>.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Artifact A */}
-            <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-4 shadow-sm">
-              <div className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider">
-                Artifact A (Candidate)
-              </div>
-
-              <div className="space-y-3 text-xs">
-                <div>
-                  <label className="text-neutral-700 font-medium block mb-1">Local file:</label>
-                  <input
-                    type="file"
-                    onChange={(e) => setInputAFile(e.target.files?.[0] || null)}
-                    className="w-full text-xs text-neutral-600 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border file:border-neutral-300 file:text-xs file:bg-white file:text-neutral-900 hover:file:bg-neutral-50 cursor-pointer"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-neutral-700 font-medium block mb-1">Or SHA-256 / Release digest:</label>
-                  <input
-                    type="text"
-                    placeholder="0x... or 64-char hex"
-                    value={inputAHashOrDigest}
-                    onChange={(e) => setInputAHashOrDigest(e.target.value)}
-                    className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-xs text-neutral-950 focus:outline-none focus:border-neutral-950"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-neutral-700 font-medium block mb-1">Signed manifest JSON (Optional):</label>
-                  <textarea
-                    rows={2}
-                    placeholder="Paste manifest JSON..."
-                    value={inputAManifestText}
-                    onChange={(e) => setInputAManifestText(e.target.value)}
-                    className="w-full rounded-md bg-white border border-neutral-200 p-2 font-mono text-[11px] text-neutral-950 focus:outline-none focus:border-neutral-950 resize-none"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Artifact B */}
-            <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-4 shadow-sm">
-              <div className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider">
-                Artifact B (Reference)
-              </div>
-
-              <div className="space-y-3 text-xs">
-                <div>
-                  <label className="text-neutral-700 font-medium block mb-1">Local file:</label>
-                  <input
-                    type="file"
-                    onChange={(e) => setInputBFile(e.target.files?.[0] || null)}
-                    className="w-full text-xs text-neutral-600 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border file:border-neutral-300 file:text-xs file:bg-white file:text-neutral-900 hover:file:bg-neutral-50 cursor-pointer"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-neutral-700 font-medium block mb-1">Or SHA-256 / Release digest:</label>
-                  <input
-                    type="text"
-                    placeholder="0x... or 64-char hex"
-                    value={inputBHashOrDigest}
-                    onChange={(e) => setInputBHashOrDigest(e.target.value)}
-                    className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-xs text-neutral-950 focus:outline-none focus:border-neutral-950"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-neutral-700 font-medium block mb-1">Signed manifest JSON (Optional):</label>
-                  <textarea
-                    rows={2}
-                    placeholder="Paste manifest JSON..."
-                    value={inputBManifestText}
-                    onChange={(e) => setInputBManifestText(e.target.value)}
-                    className="w-full rounded-md bg-white border border-neutral-200 p-2 font-mono text-[11px] text-neutral-950 focus:outline-none focus:border-neutral-950 resize-none"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-center">
-            <button
-              type="submit"
-              disabled={isProcessingLive}
-              className="px-6 py-2.5 rounded-lg bg-neutral-950 text-white hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 font-semibold text-xs transition-all shadow-sm flex items-center space-x-2"
-            >
-              {isProcessingLive ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Comparing artifacts...</span>
-                </>
-              ) : (
-                <span>Compare artifacts</span>
-              )}
-            </button>
-          </div>
-
-          {liveErrorMessage && (
-            <div className="p-3.5 rounded-lg bg-red-50 border border-red-300 text-red-950 text-xs flex items-center space-x-2">
-              <X className="w-4 h-4 text-red-700 shrink-0" />
-              <span>{liveErrorMessage}</span>
-            </div>
-          )}
-        </form>
-      )}
-
-      {/* Side-by-Side Artifact Profiles */}
-      {artifactA && artifactB && (
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Card A */}
-          <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-3.5 shadow-sm">
-            <div className="flex items-center justify-between border-b border-neutral-100 pb-2.5">
-              <span className="text-xs uppercase tracking-wider text-neutral-500 font-mono font-bold">
-                Artifact A (Candidate)
-              </span>
-              <div className="flex items-center space-x-1.5">
-                {artifactA.isDemo && (
-                  <span className="text-[10px] bg-neutral-100 text-neutral-700 px-2 py-0.5 rounded border border-neutral-200 font-mono">
-                    Demo data
-                  </span>
-                )}
-                <span
-                  className={`text-[10px] px-2 py-0.5 rounded border font-mono ${
-                    artifactA.authenticated
-                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                      : "bg-neutral-100 text-neutral-600 border-neutral-200"
-                  }`}
-                  title="Whether the manifest signature verified against the publisher's registered key"
-                >
-                  {artifactA.authenticated ? "Authenticated" : "Unauthenticated"}
-                </span>
-                <span className="text-[10px] bg-neutral-950 text-white px-2 py-0.5 rounded font-mono font-medium">
-                  {artifactA.releaseRecord?.status ?? "UNKNOWN"}
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-2 text-xs">
-              <div className="font-bold text-neutral-950 text-sm truncate">{artifactA.fileName}</div>
-              <div className="text-neutral-600">
-                Size: <span className="text-neutral-950 font-medium">{formatBytes(artifactA.fileSize)}</span>
-              </div>
-              <div className="text-neutral-600 truncate">
-                Publisher: <span className="text-neutral-950 font-semibold">{artifactA.manifest?.publisherId ?? "Unknown"}{artifactA.manifest && !artifactA.authenticated ? " (claimed)" : ""}</span>
-              </div>
-              <div className="flex items-center justify-between p-2.5 rounded bg-neutral-50 border border-neutral-200 font-mono text-[11px] gap-2">
-                <span className="truncate text-neutral-800">SHA: {artifactA.sha256}</span>
-                <button
-                  type="button"
-                  onClick={() => copyText("artA", artifactA.sha256)}
-                  className="text-neutral-400 hover:text-neutral-950 shrink-0 p-0.5"
-                  title="Copy SHA-256 hash"
-                >
-                  {copiedKey === "artA" ? <CheckCheck className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Card B */}
-          <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-3.5 shadow-sm">
-            <div className="flex items-center justify-between border-b border-neutral-100 pb-2.5">
-              <span className="text-xs uppercase tracking-wider text-neutral-500 font-mono font-bold">
-                Artifact B (Reference)
-              </span>
-              <div className="flex items-center space-x-1.5">
-                {artifactB.isDemo && (
-                  <span className="text-[10px] bg-neutral-100 text-neutral-700 px-2 py-0.5 rounded border border-neutral-200 font-mono">
-                    Demo data
-                  </span>
-                )}
-                <span
-                  className={`text-[10px] px-2 py-0.5 rounded border font-mono ${
-                    artifactB.authenticated
-                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                      : "bg-neutral-100 text-neutral-600 border-neutral-200"
-                  }`}
-                  title="Whether the manifest signature verified against the publisher's registered key"
-                >
-                  {artifactB.authenticated ? "Authenticated" : "Unauthenticated"}
-                </span>
-                <span className="text-[10px] bg-neutral-950 text-white px-2 py-0.5 rounded font-mono font-medium">
-                  {artifactB.releaseRecord?.status ?? "UNKNOWN"}
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-2 text-xs">
-              <div className="font-bold text-neutral-950 text-sm truncate">{artifactB.fileName}</div>
-              <div className="text-neutral-600">
-                Size: <span className="text-neutral-950 font-medium">{formatBytes(artifactB.fileSize)}</span>
-              </div>
-              <div className="text-neutral-600 truncate">
-                Publisher: <span className="text-neutral-950 font-semibold">{artifactB.manifest?.publisherId ?? "Unknown"}{artifactB.manifest && !artifactB.authenticated ? " (claimed)" : ""}</span>
-              </div>
-              <div className="flex items-center justify-between p-2.5 rounded bg-neutral-50 border border-neutral-200 font-mono text-[11px] gap-2">
-                <span className="truncate text-neutral-800">SHA: {artifactB.sha256}</span>
-                <button
-                  type="button"
-                  onClick={() => copyText("artB", artifactB.sha256)}
-                  className="text-neutral-400 hover:text-neutral-950 shrink-0 p-0.5"
-                  title="Copy SHA-256 hash"
-                >
-                  {copiedKey === "artB" ? <CheckCheck className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-            </div>
-          </div>
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-900 text-sm flex items-start gap-2.5">
+          <X className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
-      {/* Comparison Results */}
-      {comparison && (
-        <div className="space-y-6 animate-in fade-in duration-200">
-          <div className="p-6 rounded-xl border border-neutral-200 bg-white space-y-4 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="space-y-1">
-                <span className="text-xs uppercase tracking-wider text-neutral-500 font-mono font-bold">
-                  Forensic Relationship
-                </span>
-                <h3 className="text-lg font-bold text-neutral-950">{comparison.verdictTitle}</h3>
+      {comparison && headline && (
+        <div className="space-y-4 animate-in fade-in duration-200">
+          <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
+            <div className={`p-6 border-b ${TONE_BOX[headline.tone].box}`}>
+              <div className="flex items-start gap-4">
+                {TONE_BOX[headline.tone].icon}
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-xl sm:text-2xl font-bold tracking-tight">{headline.title}</h2>
+                    {isSample && (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/70 border border-current/20 font-medium">
+                        Sample data
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm leading-relaxed">{headline.text}</p>
+                  {chunk && !comparison.diff.hashMatch && (
+                    <p className="text-sm">
+                      {chunk.differingChunks} of {Math.max(chunk.chunksA, chunk.chunksB)} parts differ.
+                    </p>
+                  )}
+                </div>
               </div>
-              <span className="px-3 py-1 rounded text-xs font-mono font-bold bg-neutral-950 text-white shadow-sm">
-                {comparison.relationship}
-              </span>
             </div>
-
-            <p className="text-xs sm:text-sm text-neutral-700 leading-relaxed font-medium">
-              {comparison.explanation}
-            </p>
-
-            {/* Comparison Metrics Tables */}
-            <div className="pt-4 border-t border-neutral-200 space-y-4">
-              <div>
-                <h5 className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider mb-2">
-                  Section 1: Monad Testnet On-Chain Commitments
-                </h5>
-                <div className="rounded-lg border border-neutral-200 overflow-hidden shadow-sm">
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-neutral-50 border-b border-neutral-200 text-neutral-700">
-                      <tr>
-                        <th className="py-2.5 px-3 font-semibold">Registry Property</th>
-                        <th className="py-2.5 px-3 font-semibold">Artifact A</th>
-                        <th className="py-2.5 px-3 font-semibold">Artifact B</th>
-                        <th className="py-2.5 px-3 font-semibold text-right">Evaluation</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-100 text-neutral-900">
-                      <tr>
-                        <td className="py-2.5 px-3 text-neutral-500">Registry status</td>
-                        <td className="py-2.5 px-3 font-mono font-semibold">{comparison.diff.statusA}</td>
-                        <td className="py-2.5 px-3 font-mono font-semibold">{comparison.diff.statusB}</td>
-                        <td className="py-2.5 px-3 text-right">
-                          {comparison.diff.statusA === "REVOKED" || comparison.diff.statusB === "REVOKED" ? (
-                            <span className="text-red-800 font-semibold bg-red-50 px-2 py-0.5 rounded border border-red-200">
-                              Revocation Present
-                            </span>
-                          ) : comparison.diff.statusA === "ACTIVE" && comparison.diff.statusB === "ACTIVE" ? (
-                            <span className="text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                              Both Active
-                            </span>
-                          ) : (
-                            <span className="text-neutral-600 bg-neutral-100 px-2 py-0.5 rounded">Status Verified</span>
-                          )}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td className="py-2.5 px-3 text-neutral-500">Publisher identity</td>
-                        <td className="py-2.5 px-3 truncate max-w-[140px]">
-                          {artifactA?.manifest?.publisherId ?? "Unregistered"}
-                        </td>
-                        <td className="py-2.5 px-3 truncate max-w-[140px]">
-                          {artifactB?.manifest?.publisherId ?? "Unregistered"}
-                        </td>
-                        <td className="py-2.5 px-3 text-right">
-                          {comparison.diff.publisherMatch ? (
-                            <span className="text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                              Same publisher (authenticated)
-                            </span>
-                          ) : comparison.diff.claimedPublisherMatch ? (
-                            <span className="text-neutral-700 font-semibold bg-neutral-100 px-2 py-0.5 rounded border border-neutral-200">
-                              Same name claimed, not verified
-                            </span>
-                          ) : (
-                            <span className="text-amber-800 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                              Different Publishers
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div>
-                <h5 className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider mb-2">
-                  Section 2: Local Cryptographic &amp; Byte Comparison
-                </h5>
-                <div className="rounded-lg border border-neutral-200 overflow-hidden shadow-sm">
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-neutral-50 border-b border-neutral-200 text-neutral-700">
-                      <tr>
-                        <th className="py-2.5 px-3 font-semibold">Metric</th>
-                        <th className="py-2.5 px-3 font-semibold">Artifact A</th>
-                        <th className="py-2.5 px-3 font-semibold">Artifact B</th>
-                        <th className="py-2.5 px-3 font-semibold text-right">Result</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-100 text-neutral-900">
-                      <tr>
-                        <td className="py-2.5 px-3 text-neutral-500">Filename</td>
-                        <td className="py-2.5 px-3 font-mono truncate max-w-[140px]">{artifactA?.fileName}</td>
-                        <td className="py-2.5 px-3 font-mono truncate max-w-[140px]">{artifactB?.fileName}</td>
-                        <td className="py-2.5 px-3 text-right">
-                          {comparison.diff.fileNameMatch ? (
-                            <span className="text-neutral-900 font-medium">Same name</span>
-                          ) : (
-                            <span className="text-neutral-500">Different name</span>
-                          )}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td className="py-2.5 px-3 text-neutral-500">SHA-256 hash</td>
-                        <td className="py-2.5 px-3 font-mono truncate max-w-[140px]">{artifactA?.sha256.slice(0, 16)}...</td>
-                        <td className="py-2.5 px-3 font-mono truncate max-w-[140px]">{artifactB?.sha256.slice(0, 16)}...</td>
-                        <td className="py-2.5 px-3 text-right">
-                          {comparison.diff.hashMatch ? (
-                            <span className="text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                              Exact Byte Match
-                            </span>
-                          ) : (
-                            <span className="text-red-800 font-semibold bg-red-50 px-2 py-0.5 rounded border border-red-200">
-                              Byte Mismatch
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td className="py-2.5 px-3 text-neutral-500">File size</td>
-                        <td className="py-2.5 px-3">{formatBytes(artifactA?.fileSize || 0)}</td>
-                        <td className="py-2.5 px-3">{formatBytes(artifactB?.fileSize || 0)}</td>
-                        <td className="py-2.5 px-3 text-right">
-                          {comparison.diff.sizeMatch ? (
-                            <span className="text-neutral-900 font-medium">Equal size</span>
-                          ) : (
-                            <span className="text-neutral-500">Δ {comparison.diff.sizeDeltaBytes} B</span>
-                          )}
-                        </td>
-                      </tr>
-                      {comparison.diff.chunkDiff && (
-                        <tr>
-                          <td className="py-2.5 px-3 text-neutral-500">Piece / Chunk diff</td>
-                          <td className="py-2.5 px-3" colSpan={2}>
-                            {comparison.diff.chunkDiff.identicalChunks} / {comparison.diff.chunkDiff.chunksA} identical pieces
-                          </td>
-                          <td className="py-2.5 px-3 text-right">
-                            <span className="text-amber-800 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                              {comparison.diff.chunkDiff.differingChunks} piece(s) changed
-                            </span>
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+            <div className="grid sm:grid-cols-2 gap-3 p-4">
+              <ArtifactSummary label="File A" a={comparison.artifactA} />
+              <ArtifactSummary label="File B" a={comparison.artifactB} />
             </div>
           </div>
 
-          {/* Lineage Graph */}
-          <LineageTimeline
-            nodes={comparison.lineageNodes}
-            edges={comparison.lineageEdges}
-          />
+          <details className="group rounded-2xl border border-neutral-200 bg-white shadow-sm">
+            <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium text-neutral-800 flex items-center justify-between">
+              <span>Technical details</span>
+              <ChevronDown className="w-4 h-4 text-neutral-400 group-open:rotate-180 transition-transform" />
+            </summary>
+            <div className="px-5 pb-5 pt-4 border-t border-neutral-100 space-y-5 overflow-x-auto">
+              <table className="w-full text-xs">
+                <tbody className="divide-y divide-neutral-100">
+                  {[
+                    ["Fingerprint (SHA-256)", comparison.artifactA.sha256, comparison.artifactB.sha256],
+                    ["Size", formatBytes(comparison.artifactA.fileSize), formatBytes(comparison.artifactB.fileSize)],
+                    ["Publisher (as claimed)", comparison.artifactA.manifest?.publisherId ?? "—", comparison.artifactB.manifest?.publisherId ?? "—"],
+                    ["Version", comparison.diff.versionA ?? "—", comparison.diff.versionB ?? "—"],
+                    ["Registry status", comparison.diff.statusA, comparison.diff.statusB],
+                  ].map(([k, a, b]) => (
+                    <tr key={k}>
+                      <td className="py-2 pr-3 text-neutral-500 whitespace-nowrap">{k}</td>
+                      <td className="py-2 pr-3 font-mono text-neutral-800 max-w-[12rem] truncate">{a}</td>
+                      <td className="py-2 font-mono text-neutral-800 max-w-[12rem] truncate">{b}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <LineageTimeline nodes={comparison.lineageNodes} edges={comparison.lineageEdges} />
+              <p className="text-xs text-neutral-500">Result code: {comparison.relationship}</p>
+            </div>
+          </details>
         </div>
       )}
     </div>

@@ -76,12 +76,12 @@ export function PublisherPortal() {
 
   // Tabs: manifest, register, revoke, lookup
   const [activeTab, setActiveTab] = useState<"manifest" | "register" | "revoke" | "lookup" | "admin">(
-    "register"
+    "manifest"
   );
 
   // Registration form: the signed manifest is the single source of truth
   const [regManifestJson, setRegManifestJson] = useState<string>("");
-  const [regPreviousReleaseDigest, setRegPreviousReleaseDigest] = useState<string>(ZERO_BYTES32);
+  const [regPreviousReleaseDigest, setRegPreviousReleaseDigest] = useState<string>("");
   const [regCheck, setRegCheck] = useState<RegistrationCheck | null>(null);
   const [regParseError, setRegParseError] = useState<string | null>(null);
 
@@ -618,59 +618,18 @@ export function PublisherPortal() {
 
   return (
     <div className="space-y-6">
-      {/* 3-Step Numbered Workflow Banner */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-        <div className="p-3.5 rounded-lg border border-neutral-200 bg-white space-y-1">
-          <div className="font-mono text-[10px] text-neutral-500 font-bold uppercase">
-            Step 1
-          </div>
-          <div className="font-bold text-neutral-950">Author &amp; Sign Manifest</div>
-          <p className="text-[11px] text-neutral-600">
-            Compute SHA-256 &amp; sign RFC 8785 envelope with local Ed25519 key.
-          </p>
-        </div>
-
-        <div className="p-3.5 rounded-lg border border-neutral-200 bg-white space-y-1">
-          <div className="font-mono text-[10px] text-neutral-500 font-bold uppercase">
-            Step 2
-          </div>
-          <div className="font-bold text-neutral-950">Connect Publisher Wallet</div>
-          <p className="text-[11px] text-neutral-600">
-            EVM account authorized on Monad Testnet registry contract.
-          </p>
-        </div>
-
-        <div className="p-3.5 rounded-lg border border-neutral-200 bg-white space-y-1">
-          <div className="font-mono text-[10px] text-neutral-500 font-bold uppercase">
-            Step 3
-          </div>
-          <div className="font-bold text-neutral-950">Commit Release On-Chain</div>
-          <p className="text-[11px] text-neutral-600">
-            Broadcast release digest commitment into PenguinTraceRegistry.
-          </p>
-        </div>
-      </div>
-
-      {/* Credential distinction explainer */}
-      <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 text-xs space-y-2 shadow-sm">
-        <div className="font-bold text-neutral-950 flex items-center space-x-2 font-mono uppercase tracking-wider">
-          <Info className="w-4 h-4 text-neutral-700" />
-          <span>Understanding Publisher Credentials</span>
-        </div>
-        <div className="grid sm:grid-cols-2 gap-4 text-neutral-600 pt-1">
-          <div className="p-3 rounded-lg bg-white border border-neutral-200 space-y-1">
-            <span className="font-bold text-neutral-950 block">EVM Wallet Address</span>
-            <p className="text-[11px] leading-relaxed">
-              Authorizes on-chain transactions on Monad Testnet (<code className="font-mono">registerRelease</code>, <code className="font-mono">revokeRelease</code>). Must be authorized by the registry owner.
-            </p>
-          </div>
-          <div className="p-3 rounded-lg bg-white border border-neutral-200 space-y-1">
-            <span className="font-bold text-neutral-950 block">Ed25519 Signing Key</span>
-            <p className="text-[11px] leading-relaxed">
-              Cryptographically signs the detached RFC 8785 JSON manifest. Verified client-side by downloaders using the Web Crypto and curves API.
-            </p>
-          </div>
-        </div>
+      {/* What you need, in plain words */}
+      <div className="rounded-2xl bg-neutral-50 border border-neutral-200 p-5 text-sm space-y-2">
+        <div className="font-semibold text-neutral-950">What you&apos;ll need</div>
+        <ul className="space-y-1.5 text-neutral-700 list-disc list-inside">
+          <li>
+            <strong>A wallet approved as a publisher.</strong> Ask the registry admin to approve your wallet address (Admin tab).
+          </li>
+          <li>
+            <strong>Your signing key.</strong> A private key only you keep. You use it to sign each release, and it never
+            leaves your browser.
+          </li>
+        </ul>
       </div>
 
       {/* Publisher Status Header */}
@@ -678,10 +637,10 @@ export function PublisherPortal() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-0.5">
             <span className="text-xs uppercase tracking-wider text-neutral-500 font-mono font-bold">
-              Monad Testnet (Chain ID 10143)
+              Monad Testnet
             </span>
             <h3 className="text-base font-bold text-neutral-950">
-              Publisher Registry Status
+              Your publisher account
             </h3>
           </div>
 
@@ -708,7 +667,7 @@ export function PublisherPortal() {
                 onClick={switchToMonadTestnet}
                 className="px-3 py-1.5 rounded-md text-xs font-medium bg-amber-50 text-amber-950 border border-amber-300 hover:bg-amber-100"
               >
-                Switch to Monad (10143)
+                Switch to Monad Testnet
               </button>
             )}
           </div>
@@ -716,14 +675,14 @@ export function PublisherPortal() {
 
         <div className="grid sm:grid-cols-3 gap-3 text-xs">
           <div className="p-3.5 rounded-lg bg-neutral-50 border border-neutral-200 space-y-1">
-            <div className="text-neutral-500 font-mono text-[10px] uppercase">Connected Wallet:</div>
+            <div className="text-neutral-500 font-mono text-[10px] uppercase">Your wallet</div>
             <div className="font-mono text-neutral-950 font-bold truncate">
               {walletAddress || "Not connected"}
             </div>
           </div>
 
           <div className="p-3.5 rounded-lg bg-neutral-50 border border-neutral-200 space-y-1">
-            <div className="text-neutral-500 font-mono text-[10px] uppercase">Publisher Authorization:</div>
+            <div className="text-neutral-500 font-mono text-[10px] uppercase">Approved as publisher?</div>
             <div className="font-bold">
               {isCheckingAuth ? (
                 <span className="text-neutral-500">Checking...</span>
@@ -742,7 +701,7 @@ export function PublisherPortal() {
           </div>
 
           <div className="p-3.5 rounded-lg bg-neutral-50 border border-neutral-200 space-y-1">
-            <div className="text-neutral-500 font-mono text-[10px] uppercase">Registry Contract:</div>
+            <div className="text-neutral-500 font-mono text-[10px] uppercase">Registry</div>
             <div className="flex items-center justify-between font-mono text-neutral-950 gap-1">
               <span className="truncate font-semibold">{contractAddress.slice(0, 10)}...{contractAddress.slice(-6)}</span>
               <button
@@ -762,7 +721,7 @@ export function PublisherPortal() {
           <div className="p-4 rounded-lg bg-amber-50 border border-amber-300 text-amber-950 text-xs space-y-1.5 shadow-sm">
             <div className="font-bold flex items-center space-x-2">
               <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
-              <span>Wallet Not Authorized on Registry</span>
+              <span>This wallet isn&apos;t approved as a publisher yet</span>
             </div>
             <p className="text-amber-900 leading-relaxed">
               Connected address (<code className="font-mono bg-amber-100/60 px-1 py-0.5 rounded">{walletAddress}</code>) is not on the authorized publishers list in PenguinTraceRegistry. Calling <code className="font-mono">registerRelease</code> will revert on-chain. Ask the registry admin
@@ -793,7 +752,7 @@ export function PublisherPortal() {
           }`}
         >
           <FileCode className="w-3.5 h-3.5" />
-          <span>1. Author &amp; Sign Manifest</span>
+          <span>1. Sign a release</span>
         </button>
 
         <button
@@ -810,7 +769,7 @@ export function PublisherPortal() {
           }`}
         >
           <PlusCircle className="w-3.5 h-3.5" />
-          <span>2. Commit to Monad</span>
+          <span>2. Publish it</span>
         </button>
 
         <button
@@ -827,7 +786,7 @@ export function PublisherPortal() {
           }`}
         >
           <AlertOctagon className="w-3.5 h-3.5" />
-          <span>Revoke Release</span>
+          <span>Withdraw a release</span>
         </button>
 
         <button
@@ -844,7 +803,7 @@ export function PublisherPortal() {
           }`}
         >
           <Search className="w-3.5 h-3.5" />
-          <span>Registry Lookup</span>
+          <span>Look up</span>
         </button>
 
         <button
@@ -870,10 +829,10 @@ export function PublisherPortal() {
         <form onSubmit={handleGenerateAndSignManifest} className="rounded-xl border border-neutral-200 bg-white p-6 space-y-4 shadow-sm animate-in fade-in duration-200">
           <div className="space-y-1">
             <h4 className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider">
-              Author and Sign Release Manifest
+              Sign a release
             </h4>
             <p className="text-xs text-neutral-500">
-              Signs metadata according to RFC 8785 JSON Canonicalization Scheme using your local Ed25519 private key in memory. Private keys never leave your browser.
+              Choose the file you&apos;re releasing, fill in the details, and sign it with your key. Your key never leaves this browser. You&apos;ll get a small signature file to publish next to your download.
             </p>
           </div>
 
@@ -888,7 +847,7 @@ export function PublisherPortal() {
               />
             </div>
             <div>
-              <label className="text-neutral-700 font-medium block mb-1">Product ID:</label>
+              <label className="text-neutral-700 font-medium block mb-1">Product name (no spaces):</label>
               <input
                 type="text"
                 value={manifestGenProductId}
@@ -909,7 +868,7 @@ export function PublisherPortal() {
 
           <div className="grid sm:grid-cols-2 gap-3 text-xs">
             <div>
-              <label className="text-neutral-700 font-medium block mb-1">Target artifact file:</label>
+              <label className="text-neutral-700 font-medium block mb-1">File you&apos;re releasing:</label>
               <input
                 type="file"
                 onChange={handleFileSelectedForManifest}
@@ -923,7 +882,7 @@ export function PublisherPortal() {
               )}
             </div>
             <div>
-              <label className="text-neutral-700 font-medium block mb-1">Publisher Key ID:</label>
+              <label className="text-neutral-700 font-medium block mb-1">Key name (any label):</label>
               <input
                 type="text"
                 value={manifestGenKeyId}
@@ -935,11 +894,11 @@ export function PublisherPortal() {
 
           <div className="text-xs">
             <label className="text-neutral-700 font-medium block mb-1">
-              Ed25519 Private Key Hex (32 bytes / 64 hex chars):
+              Your private signing key (64 characters, never sent anywhere):
             </label>
             <input
               type="password"
-              placeholder="e.g. 9d61b19deffd5... (stored in local browser memory only)"
+              placeholder="Paste your private signing key"
               value={manifestGenPrivateKeyHex}
               onChange={(e) => setManifestGenPrivateKeyHex(e.target.value)}
               className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
@@ -951,7 +910,7 @@ export function PublisherPortal() {
               type="submit"
               className="px-5 py-2 rounded-lg bg-neutral-950 text-white hover:bg-neutral-800 font-semibold text-xs transition-all shadow-sm"
             >
-              Sign manifest locally
+              Sign release
             </button>
 
             {manifestGenSignedJson && (
@@ -960,7 +919,7 @@ export function PublisherPortal() {
                 onClick={handleTransferToRegistration}
                 className="px-4 py-2 rounded-lg bg-white text-neutral-950 border border-neutral-300 hover:bg-neutral-50 font-semibold text-xs transition-all"
               >
-                Use for on-chain registration &rarr;
+                Next: publish it &rarr;
               </button>
             )}
           </div>
@@ -982,7 +941,7 @@ export function PublisherPortal() {
           {manifestGenSignedJson && (
             <div className="space-y-2 pt-2">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-neutral-950">Signed Manifest JSON:</span>
+                <span className="font-bold text-neutral-950">Your signature file (save it as a .json next to your download):</span>
                 <button
                   type="button"
                   onClick={() => copyText("signedManifest", manifestGenSignedJson)}
@@ -1008,34 +967,34 @@ export function PublisherPortal() {
         <form onSubmit={handleRegisterRelease} className="rounded-xl border border-neutral-200 bg-white p-6 space-y-4 shadow-sm animate-in fade-in duration-200">
           <div className="space-y-1">
             <h4 className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider">
-              Commit Release to Monad Testnet Registry
+              Publish the release
             </h4>
             <p className="text-xs text-neutral-500">
-              Broadcasts an immutable release commitment storing file hash, manifest digest, and predecessor link.
+              Records your signed release on Monad so anyone can check it. This can&apos;t be edited later, only withdrawn.
             </p>
           </div>
 
           <div className="space-y-3 text-xs">
             <div>
-              <label className="text-neutral-700 font-medium block mb-1">Signed release manifest JSON:</label>
+              <label className="text-neutral-700 font-medium block mb-1">Signed release (from step 1):</label>
               <textarea
                 rows={6}
                 value={regManifestJson}
                 onChange={(e) => setRegManifestJson(e.target.value)}
-                placeholder="Paste the signed manifest, or sign one in step 1 and transfer it here."
+                placeholder="Sign a release in step 1, or paste a signature file here."
                 className="w-full rounded-md bg-white border border-neutral-200 p-2.5 font-mono text-[11px] text-neutral-900 focus:outline-none focus:border-neutral-950 resize-none"
               />
               <p className="text-[11px] text-neutral-500 mt-1">
-                The product, version, file hash and manifest digest are taken from this manifest. Its signature is checked
-                against your on-chain Ed25519 key before anything is sent.
+                We check it was signed with your registered key before anything is sent.
               </p>
             </div>
 
             <div>
-              <label className="text-neutral-700 font-medium block mb-1">Previous Release Digest (Optional, for supersession):</label>
+              <label className="text-neutral-700 font-medium block mb-1">Replaces an earlier release? Paste its release ID (optional):</label>
               <input
                 type="text"
                 value={regPreviousReleaseDigest}
+                placeholder="Leave empty for a first release"
                 onChange={(e) => setRegPreviousReleaseDigest(e.target.value)}
                 className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
               />
@@ -1049,11 +1008,11 @@ export function PublisherPortal() {
           {regCheck && (
             <div className="rounded-lg border border-neutral-200 text-xs divide-y divide-neutral-100">
               {[
-                ["Publisher ID (on-chain)", onChainPublisher?.publisherId ?? "— wallet not registered —"],
+                ["Publisher", onChainPublisher?.publisherId ?? "— wallet not approved yet —"],
                 ["Product", regCheck.manifest.productId],
                 ["Version", regCheck.manifest.releaseVersion],
-                ["File SHA-256", with0x(regCheck.manifest.sha256)],
-                ["Manifest digest", regCheck.manifestDigest],
+                ["File fingerprint", with0x(regCheck.manifest.sha256)],
+                ["Signature fingerprint", regCheck.manifestDigest],
               ].map(([label, value]) => (
                 <div key={label} className="flex justify-between gap-3 px-3 py-2">
                   <span className="text-neutral-500 shrink-0">{label}</span>
@@ -1064,7 +1023,7 @@ export function PublisherPortal() {
                 {regCheck.problems.length === 0 ? (
                   <span className="inline-flex items-center space-x-1.5 text-emerald-800 font-semibold">
                     <Check className="w-3.5 h-3.5" />
-                    <span>Signature verified against your registered Ed25519 key</span>
+                    <span>Signed with your registered key</span>
                   </span>
                 ) : (
                   <ul className="space-y-1 text-red-800">
@@ -1083,7 +1042,7 @@ export function PublisherPortal() {
           {/* High-Contrast Computed Preview Digest Box */}
           <div className="p-4 rounded-xl bg-neutral-950 text-white border border-neutral-800 space-y-1.5 text-xs shadow-sm">
             <div className="text-neutral-400 flex items-center justify-between font-mono text-[11px]">
-              <span>Deterministic Release Digest (keccak256):</span>
+              <span>Release ID:</span>
               <span className="text-neutral-400">
                 {onChainPublisher ? "Uses on-chain publisherId" : "Preview (wallet not registered)"}
               </span>
@@ -1099,7 +1058,7 @@ export function PublisherPortal() {
               disabled={isSubmitting || !regCheck || regCheck.problems.length > 0}
               className="px-6 py-2.5 rounded-lg bg-neutral-950 text-white hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 font-semibold text-xs transition-all shadow-sm flex items-center space-x-2"
             >
-              <span>{isSubmitting ? "Broadcasting..." : "Commit release to Monad"}</span>
+              <span>{isSubmitting ? "Publishing..." : "Publish release"}</span>
             </button>
 
             {confirmedTxHash && (
@@ -1122,16 +1081,16 @@ export function PublisherPortal() {
         <form onSubmit={handleRevokeRelease} className="rounded-xl border border-neutral-200 bg-white p-6 space-y-4 shadow-sm animate-in fade-in duration-200">
           <div className="space-y-1">
             <h4 className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider">
-              Revoke Compromised Release
+              Withdraw a release
             </h4>
             <p className="text-xs text-neutral-500">
-              Permanently marks a release commitment as REVOKED on Monad Testnet.
+              Mark a release as unsafe. Anyone who checks it will be told not to use it. This is permanent.
             </p>
           </div>
 
           <div className="space-y-3 text-xs">
             <div>
-              <label className="text-neutral-700 font-medium block mb-1">Release Digest to Revoke (bytes32):</label>
+              <label className="text-neutral-700 font-medium block mb-1">Release ID (shown after publishing, starts with 0x):</label>
               <input
                 type="text"
                 placeholder="0x..."
@@ -1142,7 +1101,7 @@ export function PublisherPortal() {
             </div>
 
             <div>
-              <label className="text-neutral-700 font-medium block mb-1">Revocation Reason:</label>
+              <label className="text-neutral-700 font-medium block mb-1">Reason (shown to people who check the file):</label>
               <input
                 type="text"
                 value={revokeReason}
@@ -1158,7 +1117,7 @@ export function PublisherPortal() {
               disabled={isSubmitting}
               className="px-6 py-2.5 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:bg-neutral-200 disabled:text-neutral-400 font-semibold text-xs transition-all shadow-sm"
             >
-              <span>{isSubmitting ? "Revoking..." : "Revoke release on Monad"}</span>
+              <span>{isSubmitting ? "Withdrawing..." : "Withdraw this release"}</span>
             </button>
 
             {confirmedTxHash && (
@@ -1181,7 +1140,7 @@ export function PublisherPortal() {
         <form onSubmit={handleLookupRelease} className="rounded-xl border border-neutral-200 bg-white p-6 space-y-4 shadow-sm animate-in fade-in duration-200">
           <div className="space-y-1">
             <h4 className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider">
-              Query Registry by Release Digest or Publisher + File Hash
+              Look up a release
             </h4>
             <p className="text-xs text-neutral-500">
               Query live commitments recorded on Monad Testnet (<code className="font-mono">{contractAddress.slice(0, 8)}...</code>).
@@ -1192,14 +1151,14 @@ export function PublisherPortal() {
           <div className="flex flex-col sm:flex-row gap-2">
             <input
               type="text"
-              placeholder="Publisher ID (only for file-hash lookup)"
+              placeholder="Publisher ID (only needed for a fingerprint)"
               value={lookupPublisherId}
               onChange={(e) => setLookupPublisherId(e.target.value)}
               className="sm:w-56 rounded-md bg-white border border-neutral-200 px-3 py-2 font-mono text-xs text-neutral-950 focus:outline-none focus:border-neutral-950"
             />
             <input
               type="text"
-              placeholder="0x... release digest or file SHA-256"
+              placeholder="Release ID or file fingerprint (0x...)"
               value={lookupQuery}
               onChange={(e) => setLookupQuery(e.target.value)}
               className="flex-1 rounded-md bg-white border border-neutral-200 px-3 py-2 font-mono text-xs text-neutral-950 focus:outline-none focus:border-neutral-950"
@@ -1242,7 +1201,7 @@ export function PublisherPortal() {
         <form onSubmit={handleAuthorizePublisher} className="rounded-xl border border-neutral-200 bg-white p-6 space-y-4 shadow-sm animate-in fade-in duration-200">
           <div className="space-y-1">
             <h4 className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider">
-              Authorize or Deauthorize Publishers
+              Approve or remove publishers
             </h4>
             <p className="text-xs text-neutral-500">
               Only the registry admin{" "}
@@ -1261,7 +1220,7 @@ export function PublisherPortal() {
 
           <div className="grid sm:grid-cols-2 gap-3 text-xs">
             <div>
-              <label className="text-neutral-700 font-medium block mb-1">Publisher account address:</label>
+              <label className="text-neutral-700 font-medium block mb-1">Publisher&apos;s wallet address:</label>
               <input
                 type="text"
                 placeholder="0x..."
@@ -1282,7 +1241,7 @@ export function PublisherPortal() {
             </div>
           </div>
           <div className="text-xs">
-            <label className="text-neutral-700 font-medium block mb-1">Ed25519 public key (32-byte hex):</label>
+            <label className="text-neutral-700 font-medium block mb-1">Publisher&apos;s public signing key (64 characters):</label>
             <input
               type="text"
               placeholder="64 hex characters"
@@ -1298,7 +1257,7 @@ export function PublisherPortal() {
               disabled={isSubmitting || !isRegistryAdmin}
               className="px-5 py-2.5 rounded-lg bg-neutral-950 text-white hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 font-semibold text-xs transition-all shadow-sm"
             >
-              {isSubmitting ? "Broadcasting..." : "Authorize publisher"}
+              {isSubmitting ? "Sending..." : "Approve publisher"}
             </button>
             <button
               type="button"
@@ -1306,7 +1265,7 @@ export function PublisherPortal() {
               disabled={isSubmitting || !isRegistryAdmin}
               className="px-5 py-2.5 rounded-lg bg-white text-red-700 border border-red-300 hover:bg-red-50 disabled:bg-neutral-100 disabled:text-neutral-400 disabled:border-neutral-200 font-semibold text-xs transition-all"
             >
-              Deauthorize address
+              Remove publisher
             </button>
           </div>
         </form>
