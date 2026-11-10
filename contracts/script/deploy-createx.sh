@@ -58,7 +58,7 @@ else
   fi
 
   echo "Deploying through CreateX via the Agent Wallet session..."
-  alchemy evm contract call "$CREATEX" "deployCreate2(bytes32,bytes)" --args "$SALT,$INIT_CODE" -n "$NETWORK"
+  alchemy evm contract call "$CREATEX" "deployCreate2(bytes32,bytes)" --args "[\"$SALT\",\"$INIT_CODE\"]" -n "$NETWORK"
 
   echo -n "Waiting for code at $PREDICTED"
   for _ in $(seq 1 60); do

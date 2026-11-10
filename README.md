@@ -56,13 +56,12 @@ Penguin Trace uses Monad Testnet to run an immutable, append-only registry contr
 
 This creates an independently verifiable public ledger of release history that a compromised download mirror cannot retroactively modify. Monad was selected for its EVM compatibility, sub-second block finality, and low transaction costs for recording high-frequency releases.
 
-- **Contract Address:** [`0xeB3Ef45368cf0A28679FC6F037295fC2607deF01`](https://testnet.monadscan.com/address/0xeB3Ef45368cf0A28679FC6F037295fC2607deF01)
-- **Deployment Transaction:** [`0x037d4996320061039d5632c7cede5bb021fcdb29446ddbcf3e10fea63ff820f9`](https://testnet.monadscan.com/tx/0x037d4996320061039d5632c7cede5bb021fcdb29446ddbcf3e10fea63ff820f9)
+- **Contract Address:** [`0x9E7AF4e6301C7ce483Fe609E130aC845DDD4d1Bc`](https://testnet.monadscan.com/address/0x9E7AF4e6301C7ce483Fe609E130aC845DDD4d1Bc) (`PenguinTraceRegistry`, source verified on Monadscan)
+- **Deployment Transaction:** [`0x615b9da117d0f1ddf37aee1b6e371f8a90d5882cd74d5aa8a809c568db32bde7`](https://testnet.monadscan.com/tx/0x615b9da117d0f1ddf37aee1b6e371f8a90d5882cd74d5aa8a809c568db32bde7) (CREATE2 via CreateX, salt `0x0`)
+- **Registry Admin:** `0x2603e032e8ec090c1f6ef25d30da199210f439e1`
 - **Network:** Monad Testnet (Chain ID `10143`)
 
-*Note: The registry interface changed (per-release `signingKey`, publisher-scoped `getReleaseByFileHash`). The contract at the address above predates that change and must be redeployed with `contracts/script/DeployPenguinTrace.s.sol`, then `NEXT_PUBLIC_PENGUINTRACE_REGISTRY_ADDRESS` updated.*
-
-*The contract bytecode is deployed and verified on testnet. Live publisher authorizations and production release commitments have not yet been broadcast to this contract instance; the application uses local fixtures for demonstration.*
+*No publishers or releases are registered yet. The admin authorizes publishers (Admin tab or `alchemy evm contract call`), and publishers register releases from the portal.*
 
 ## Tech stack
 
