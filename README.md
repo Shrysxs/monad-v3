@@ -126,11 +126,27 @@ With no address set, live registry checks are disabled and every live verificati
 
 ### Deploying the registry
 
+**Recommended (monskills flow):** deploy from an Alchemy Agent Wallet session via CREATE2 through the CreateX factory. No private key ever touches your machine, and the source is verified on all Monad explorers automatically.
+
+```bash
+npm install -g @alchemy/cli@latest      # v0.18.0+
+alchemy auth                             # or: alchemy auth login --device-code
+# Create an EVM Agent Wallet session at https://dashboard.alchemy.com/products/agent-wallet/evm-wallet, then:
+alchemy wallet connect --mode session && alchemy wallet use session
+
+contracts/script/deploy-createx.sh <registry-admin-address>
+```
+
+The admin address is passed to the constructor, so use your own browser wallet to manage publishers from the portal's Admin tab.
+
+**Alternative (Foundry keystore):**
+
 ```bash
 cd contracts
 forge script script/DeployPenguinTrace.s.sol --rpc-url monad_testnet --broadcast --account <keystore-name>
-cd .. && npm run contracts:build && npm run abi:sync   # only needed after contract changes
 ```
+
+After changing the contract, regenerate the frontend ABI with `npm run contracts:build && npm run abi:sync`.
 
 The deployer becomes the registry admin. Connect that wallet in the publisher portal's **Admin** tab to authorize publisher accounts (address, publisher ID, Ed25519 public key).
 
