@@ -2,12 +2,12 @@
 pragma solidity 0.8.28;
 
 /**
- * @title ISwarmTraceRegistry
- * @notice Canonical registry interface for SwarmTrace release provenance and publisher authorization on Monad.
+ * @title IPenguinTraceRegistry
+ * @notice Canonical registry interface for PenguinTrace release provenance and publisher authorization on Monad.
  * @dev Stores only cryptographic commitments and state machine transitions.
  *      Raw files, full manifests, private keys, personal data, and large scan reports remain off-chain.
  */
-interface ISwarmTraceRegistry {
+interface IPenguinTraceRegistry {
     /// @notice Lifecycle status of a release
     enum ReleaseStatus {
         Unknown,    // 0: Record not found in registry
@@ -19,7 +19,7 @@ interface ISwarmTraceRegistry {
     /// @notice Publisher identity and authorized signing key metadata
     struct PublisherInfo {
         address publisherAddress;
-        string publisherId;          // Canonical reverse-DNS identifier (e.g. "org.swarmtrace.core")
+        string publisherId;          // Canonical reverse-DNS identifier (e.g. "org.penguintrace.core")
         bytes32 ed25519PubKey;       // 32-byte Ed25519 public key used for manifest signatures
         uint256 authorizedAt;        // Timestamp when authorized
         bool isAuthorized;           // Whether publisher is currently authorized
@@ -30,7 +30,7 @@ interface ISwarmTraceRegistry {
         bytes32 releaseDigest;          // keccak256 commitment of the release tuple
         address publisherAddress;       // Registered publisher address
         string publisherId;             // Publisher identifier
-        string productId;               // Product identifier (e.g. "swarmtrace-node")
+        string productId;               // Product identifier (e.g. "penguintrace-node")
         string releaseVersion;          // Semantic version string (e.g. "1.0.0")
         bytes32 fileHash;               // SHA-256 digest of the entire file
         bytes32 manifestDigest;         // SHA-256 digest of the canonical RFC 8785 manifest payload

@@ -45,7 +45,7 @@ Verification follows these steps:
 
 File hashing and Ed25519 signature checks can be performed entirely offline. However, static checksums published on standard HTTP mirrors or vendor websites share the same single point of failure as the download itself: if the mirror or DNS is compromised, the posted hashes and public keys can be swapped simultaneously.
 
-Penguin Trace uses Monad Testnet to run an immutable, append-only registry contract (`SwarmTraceRegistry`). The contract stores:
+Penguin Trace uses Monad Testnet to run an immutable, append-only registry contract (`PenguinTraceRegistry`). The contract stores:
 
 - Authorized publisher IDs and their corresponding Ed25519 public keys
 - Deterministic release digests (`keccak256(publisherId, productId, releaseVersion, fileHash, manifestDigest)`)
@@ -60,7 +60,7 @@ This creates an independently verifiable public ledger of release history that a
 - **Deployment Transaction:** [`0x037d4996320061039d5632c7cede5bb021fcdb29446ddbcf3e10fea63ff820f9`](https://testnet.monadscan.com/tx/0x037d4996320061039d5632c7cede5bb021fcdb29446ddbcf3e10fea63ff820f9)
 - **Network:** Monad Testnet (Chain ID `10143`)
 
-*Note: The registry interface changed (per-release `signingKey`, publisher-scoped `getReleaseByFileHash`). The contract at the address above predates that change and must be redeployed with `contracts/script/DeploySwarmTrace.s.sol`, then `NEXT_PUBLIC_SWARMTRACE_REGISTRY_ADDRESS` updated.*
+*Note: The registry interface changed (per-release `signingKey`, publisher-scoped `getReleaseByFileHash`). The contract at the address above predates that change and must be redeployed with `contracts/script/DeployPenguinTrace.s.sol`, then `NEXT_PUBLIC_PENGUINTRACE_REGISTRY_ADDRESS` updated.*
 
 *The contract bytecode is deployed and verified on testnet. Live publisher authorizations and production release commitments have not yet been broadcast to this contract instance; the application uses local fixtures for demonstration.*
 
@@ -111,16 +111,28 @@ Copy the example environment file:
 cp .env.example .env.local
 ```
 
-The default `.env.local` is preconfigured for Monad Testnet and the deployed registry contract:
+The example file is preconfigured for Monad Testnet. Set the registry address to your deployment of `PenguinTraceRegistry` (see [Deploying the registry](#deploying-the-registry)):
 
 ```ini
 NEXT_PUBLIC_MONAD_CHAIN_ID=10143
 NEXT_PUBLIC_MONAD_RPC_URL=https://testnet-rpc.monad.xyz
 NEXT_PUBLIC_MONAD_EXPLORER_URL=https://testnet.monadscan.com
-NEXT_PUBLIC_SWARMTRACE_REGISTRY_ADDRESS=0xeB3Ef45368cf0A28679FC6F037295fC2607deF01
+NEXT_PUBLIC_PENGUINTRACE_REGISTRY_ADDRESS=0x...   # address printed by the deploy script
 ```
 
+With no address set, live registry checks are disabled and every live verification ends in `UNKNOWN_RELEASE`; the demo fixtures still work. The older `NEXT_PUBLIC_SWARMTRACE_REGISTRY_ADDRESS` name is still read as a fallback.
+
 *Never store private keys or signing secrets in `.env.local` or any file tracked by version control.*
+
+### Deploying the registry
+
+```bash
+cd contracts
+forge script script/DeployPenguinTrace.s.sol --rpc-url monad_testnet --broadcast --account <keystore-name>
+cd .. && npm run contracts:build && npm run abi:sync   # only needed after contract changes
+```
+
+The deployer becomes the registry admin. Connect that wallet in the publisher portal's **Admin** tab to authorize publisher accounts (address, publisher ID, Ed25519 public key).
 
 ### Running locally
 
@@ -163,7 +175,7 @@ Runs 54 tests across 6 test suites:
 npm run contracts:test
 ```
 
-Runs 29 Solidity tests in `contracts/test/SwarmTraceRegistry.t.sol`:
+Runs 29 Solidity tests in `contracts/test/PenguinTraceRegistry.t.sol`:
 - Publisher authorization and deauthorization by contract owner
 - Release commitment registration and collision resistance
 - Per-release signing key recording across key rotation
@@ -198,7 +210,7 @@ The demo does not require a Web3 wallet, testnet gas, or external API keys. It r
 - **No live BitTorrent client:** The application does not connect to the BitTorrent wire protocol (TCP/uTP peer connections) or scrape active swarms. Piece integrity is verified against chunk hashes declared in the manifest.
 - **No integrated malware scanner:** The tool does not submit files to VirusTotal or execute dynamic sandbox analysis. External scanner status is honestly reported as unavailable.
 - **Hashing speed:** Files are streamed from disk and hashed incrementally in a Web Worker (8 MiB at a time), so memory use stays flat regardless of file size. Very large files still take time to hash; progress is shown while hashing.
-- **On-chain registry state:** While the `SwarmTraceRegistry` contract is deployed on Monad Testnet, live publisher accounts and production software releases have not yet been registered on-chain. The publisher portal allows submitting transactions, but pre-seeded scenarios rely on local fixtures.
+- **On-chain registry state:** While the `PenguinTraceRegistry` contract is deployed on Monad Testnet, live publisher accounts and production software releases have not yet been registered on-chain. The publisher portal allows submitting transactions, but pre-seeded scenarios rely on local fixtures.
 - **Deployment:** The application is configured and verified for local execution; it is not currently deployed to a public hosting URL.
 
 ## Project status

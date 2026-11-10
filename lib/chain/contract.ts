@@ -17,11 +17,11 @@ import type {
 } from "../verification/types";
 
 /** @deprecated Use REGISTRY_ABI */
-export const SWARMTRACE_REGISTRY_ABI = REGISTRY_ABI;
+export const PENGUINTRACE_REGISTRY_ABI = REGISTRY_ABI;
 export { REGISTRY_ABI };
 
 /**
- * Calculates canonical release digest matching ISwarmTraceRegistry.sol:
+ * Calculates canonical release digest matching IPenguinTraceRegistry.sol:
  * keccak256(abi.encode(publisherId, productId, releaseVersion, fileHash, manifestDigest))
  */
 export function calculateReleaseDigest(
@@ -40,11 +40,15 @@ export function calculateReleaseDigest(
 }
 
 /**
- * Returns the configured SwarmTraceRegistry contract address.
+ * Returns the configured PenguinTraceRegistry contract address.
  * Validates format and falls back to placeholder if unset before Phase 2 deployment.
  */
 export function getRegistryAddress(): `0x${string}` {
-  const envAddr = process.env.NEXT_PUBLIC_SWARMTRACE_REGISTRY_ADDRESS;
+  // NEXT_PUBLIC_SWARMTRACE_REGISTRY_ADDRESS is the pre-rename variable, still honored.
+  // (Each name must be written out literally so Next.js can inline it at build time.)
+  const envAddr =
+    process.env.NEXT_PUBLIC_PENGUINTRACE_REGISTRY_ADDRESS ||
+    process.env.NEXT_PUBLIC_SWARMTRACE_REGISTRY_ADDRESS;
   if (envAddr && /^0x[a-fA-F0-9]{40}$/.test(envAddr)) {
     return envAddr as `0x${string}`;
   }
@@ -53,7 +57,7 @@ export function getRegistryAddress(): `0x${string}` {
 }
 
 /**
- * Checks whether the SwarmTraceRegistry contract has a configured, non-zero address.
+ * Checks whether the PenguinTraceRegistry contract has a configured, non-zero address.
  */
 export function isRegistryConfigured(): boolean {
   const addr = getRegistryAddress();
@@ -61,14 +65,14 @@ export function isRegistryConfigured(): boolean {
 }
 
 /**
- * Creates a typed viem contract instance for SwarmTraceRegistry.
+ * Creates a typed viem contract instance for PenguinTraceRegistry.
  * Throws if the registry address is unset or zero address to prevent silent execution against null target.
  */
-export function getSwarmTraceRegistryContract(client: PublicClient | WalletClient) {
+export function getPenguinTraceRegistryContract(client: PublicClient | WalletClient) {
   const address = getRegistryAddress();
   if (address === "0x0000000000000000000000000000000000000000") {
     throw new Error(
-      "SwarmTraceRegistry address is unconfigured (0x0). Set NEXT_PUBLIC_SWARMTRACE_REGISTRY_ADDRESS in environment."
+      "PenguinTraceRegistry address is unconfigured (0x0). Set NEXT_PUBLIC_PENGUINTRACE_REGISTRY_ADDRESS in environment."
     );
   }
   return getContract({

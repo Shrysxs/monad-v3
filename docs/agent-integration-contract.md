@@ -1,4 +1,4 @@
-# SwarmTrace Agent Integration & Ownership Contract
+# PenguinTrace Agent Integration & Ownership Contract
 
 **Document Status:** Frozen — Phase 1 Baseline  
 **Governing Lead:** Technical Lead / Principal Engineer  
@@ -40,15 +40,15 @@ All agents must import interfaces and helpers from the canonical paths:
  │ (contracts/)   │  2. Execute: forge build --root contracts
  └───────┬────────┘
          │
-         ▼ Output: contracts/out/SwarmTraceRegistry.sol/SwarmTraceRegistry.json
+         ▼ Output: contracts/out/PenguinTraceRegistry.sol/PenguinTraceRegistry.json
  ┌────────────────┐
  │ Technical Lead │  3. Extract and synchronize ABI
- │ (lib/chain/)   │     lib/chain/abis/SwarmTraceRegistry.json
+ │ (lib/chain/)   │     lib/chain/abis/PenguinTraceRegistry.json
  └───────┬────────┘     Exports typed contract hooks in lib/chain/contract.ts
          │
          ▼ Consumed by
  ┌────────────────┐
- │    Agent C     │  4. Uses getSwarmTraceRegistryContract() & SWARMTRACE_REGISTRY_ABI
+ │    Agent C     │  4. Uses getPenguinTraceRegistryContract() & PENGUINTRACE_REGISTRY_ABI
  │    (app/)      │     with viem/wagmi hooks for on-chain reads and transactions
  └────────────────┘
 ```
@@ -57,7 +57,7 @@ All agents must import interfaces and helpers from the canonical paths:
 
 ## 4. Error Handling Conventions
 
-1. **Smart Contracts (`ISwarmTraceRegistry.sol`)**:
+1. **Smart Contracts (`IPenguinTraceRegistry.sol`)**:
    - Uses custom Solidity errors with parameters (e.g. `NotAuthorizedPublisher(address caller)`, `UnauthorizedRevocation(address caller, address releaseOwner)`, `ReleaseAlreadyExists(bytes32 digest)`).
    - Reverts must never be generic `require(bool)` strings.
 2. **Cryptographic Engine (`lib/crypto/`, `lib/manifests/`)**:
@@ -76,7 +76,7 @@ All agents must import interfaces and helpers from the canonical paths:
 NEXT_PUBLIC_MONAD_CHAIN_ID=10143
 NEXT_PUBLIC_MONAD_RPC_URL=https://testnet-rpc.monad.xyz
 NEXT_PUBLIC_MONAD_EXPLORER_URL=https://testnet.monadscan.com
-NEXT_PUBLIC_SWARMTRACE_REGISTRY_ADDRESS=0x...
+NEXT_PUBLIC_PENGUINTRACE_REGISTRY_ADDRESS=0x...
 
 # SERVER & SCRIPT ONLY (NEVER commit, NEVER prefix with NEXT_PUBLIC_)
 PRIVATE_KEY=

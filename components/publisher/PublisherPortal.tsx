@@ -646,7 +646,7 @@ export function PublisherPortal() {
           </div>
           <div className="font-bold text-neutral-950">Commit Release On-Chain</div>
           <p className="text-[11px] text-neutral-600">
-            Broadcast release digest commitment into SwarmTraceRegistry.
+            Broadcast release digest commitment into PenguinTraceRegistry.
           </p>
         </div>
       </div>
@@ -765,7 +765,7 @@ export function PublisherPortal() {
               <span>Wallet Not Authorized on Registry</span>
             </div>
             <p className="text-amber-900 leading-relaxed">
-              Connected address (<code className="font-mono bg-amber-100/60 px-1 py-0.5 rounded">{walletAddress}</code>) is not on the authorized publishers list in SwarmTraceRegistry. Calling <code className="font-mono">registerRelease</code> will revert on-chain. Ask the registry admin
+              Connected address (<code className="font-mono bg-amber-100/60 px-1 py-0.5 rounded">{walletAddress}</code>) is not on the authorized publishers list in PenguinTraceRegistry. Calling <code className="font-mono">registerRelease</code> will revert on-chain. Ask the registry admin
               {registryOwner ? (
                 <>
                   {" "}(<code className="font-mono">{registryOwner.slice(0, 10)}...</code>)

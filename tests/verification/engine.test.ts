@@ -12,13 +12,13 @@ import type {
 
 describe("Live Swarm Integrity Verification Engine", () => {
   const keyPair = generateEd25519KeyPair();
-  const testFileBytes = new TextEncoder().encode("Hello SwarmTrace Monad Testnet!");
+  const testFileBytes = new TextEncoder().encode("Hello PenguinTrace Monad Testnet!");
   const PUBLISHER_ADDRESS = "0xCAFE000000000000000000000000000000000001" as const;
 
   /** Registry entry for the test publisher (the only trusted source of its key). */
   const publisher: RegistryPublisher = {
     publisherAddress: PUBLISHER_ADDRESS,
-    publisherId: "org.swarmtrace.core",
+    publisherId: "org.penguintrace.core",
     ed25519PubKey: `0x${keyPair.publicKeyHex}`,
     authorizedAt: 0,
     isAuthorized: true,
@@ -58,10 +58,10 @@ describe("Live Swarm Integrity Verification Engine", () => {
 
     const payload: ReleaseManifestPayload = {
       schemaVersion: "1.0.0",
-      publisherId: "org.swarmtrace.core",
-      productId: "swarmtrace-client",
+      publisherId: "org.penguintrace.core",
+      productId: "penguintrace-client",
       releaseVersion: "1.0.0",
-      fileName: "swarmtrace-client-v1.0.0.tar.gz",
+      fileName: "penguintrace-client-v1.0.0.tar.gz",
       fileSize: bytes.byteLength,
       sha256: fileSha256,
       chunkSize: 16,
@@ -87,8 +87,8 @@ describe("Live Swarm Integrity Verification Engine", () => {
     const activeRecord: ReleaseRecord = {
       releaseDigest: "0x1111111111111111111111111111111111111111111111111111111111111111",
       publisherAddress: "0xCAFE000000000000000000000000000000000001",
-      publisherId: "org.swarmtrace.core",
-      productId: "swarmtrace-client",
+      publisherId: "org.penguintrace.core",
+      productId: "penguintrace-client",
       releaseVersion: "1.0.0",
       fileHash: ("0x" + manifest.sha256) as `0x${string}`,
       manifestDigest: ("0x" + manifestDigest) as `0x${string}`,
@@ -100,7 +100,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
 
     const verdict = await verifyFileAgainstManifest({
       fileBytes: testFileBytes,
-      fileName: "swarmtrace-client-v1.0.0.tar.gz",
+      fileName: "penguintrace-client-v1.0.0.tar.gz",
       manifest,
       publisher,
       onChainRecord: activeRecord,
@@ -123,7 +123,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
 
     const verdict = await verifyFileAgainstManifest({
       fileBytes: tamperedBytes,
-      fileName: "swarmtrace-client-v1.0.0.tar.gz",
+      fileName: "penguintrace-client-v1.0.0.tar.gz",
       manifest,
       publisher,
     });
@@ -142,7 +142,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
 
     const verdict = await verifyFileAgainstManifest({
       fileBytes: testFileBytes,
-      fileName: "swarmtrace-client-v1.0.0.tar.gz",
+      fileName: "penguintrace-client-v1.0.0.tar.gz",
       manifest,
       publisher,
     });
@@ -156,8 +156,8 @@ describe("Live Swarm Integrity Verification Engine", () => {
     const revokedRecord: ReleaseRecord = {
       releaseDigest: "0x1111111111111111111111111111111111111111111111111111111111111111",
       publisherAddress: "0xCAFE000000000000000000000000000000000001",
-      publisherId: "org.swarmtrace.core",
-      productId: "swarmtrace-client",
+      publisherId: "org.penguintrace.core",
+      productId: "penguintrace-client",
       releaseVersion: "1.0.0",
       fileHash: ("0x" + manifest.sha256) as `0x${string}`,
       manifestDigest: ("0x" + manifestDigest) as `0x${string}`,
@@ -171,7 +171,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
 
     const verdict = await verifyFileAgainstManifest({
       fileBytes: testFileBytes,
-      fileName: "swarmtrace-client-v1.0.0.tar.gz",
+      fileName: "penguintrace-client-v1.0.0.tar.gz",
       manifest,
       publisher,
       onChainRecord: revokedRecord,
@@ -188,8 +188,8 @@ describe("Live Swarm Integrity Verification Engine", () => {
     const spoofedRecord: ReleaseRecord = {
       releaseDigest: "0x1111111111111111111111111111111111111111111111111111111111111111",
       publisherAddress: "0xCAFE000000000000000000000000000000000001",
-      publisherId: "org.swarmtrace.core",
-      productId: "swarmtrace-client",
+      publisherId: "org.penguintrace.core",
+      productId: "penguintrace-client",
       releaseVersion: "1.0.0",
       fileHash: "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", // Mismatched!
       manifestDigest: ("0x" + manifestDigest) as `0x${string}`,
@@ -201,7 +201,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
 
     const verdict = await verifyFileAgainstManifest({
       fileBytes: testFileBytes,
-      fileName: "swarmtrace-client-v1.0.0.tar.gz",
+      fileName: "penguintrace-client-v1.0.0.tar.gz",
       manifest,
       publisher,
       onChainRecord: spoofedRecord,
@@ -218,7 +218,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
       releaseDigest: "0x1111111111111111111111111111111111111111111111111111111111111111",
       publisherAddress: "0xCAFE000000000000000000000000000000000001",
       publisherId: "attacker.rogue.org", // Mismatched publisher!
-      productId: "swarmtrace-client",
+      productId: "penguintrace-client",
       releaseVersion: "1.0.0",
       fileHash: ("0x" + manifest.sha256) as `0x${string}`,
       manifestDigest: ("0x" + manifestDigest) as `0x${string}`,
@@ -230,7 +230,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
 
     const verdict = await verifyFileAgainstManifest({
       fileBytes: testFileBytes,
-      fileName: "swarmtrace-client-v1.0.0.tar.gz",
+      fileName: "penguintrace-client-v1.0.0.tar.gz",
       manifest,
       publisher,
       onChainRecord: spoofedRecord,
@@ -242,13 +242,13 @@ describe("Live Swarm Integrity Verification Engine", () => {
 
   describe("trusted key resolution", () => {
     it("never authenticates a manifest when the publisher is not registered (self-signed impostor)", async () => {
-      // Attacker signs their own manifest, claiming to be org.swarmtrace.core.
+      // Attacker signs their own manifest, claiming to be org.penguintrace.core.
       const attacker = generateEd25519KeyPair();
       const { manifest } = await createSignedManifest(testFileBytes, attacker.privateKeyHex);
 
       const verdict = await verifyFileAgainstManifest({
         fileBytes: testFileBytes,
-        fileName: "swarmtrace-client-v1.0.0.tar.gz",
+        fileName: "penguintrace-client-v1.0.0.tar.gz",
         manifest,
         publisher: null,
       });
@@ -264,7 +264,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
 
       const verdict = await verifyFileAgainstManifest({
         fileBytes: testFileBytes,
-        fileName: "swarmtrace-client-v1.0.0.tar.gz",
+        fileName: "penguintrace-client-v1.0.0.tar.gz",
         manifest,
         publisher,
       });
@@ -279,7 +279,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
 
       const verdict = await verifyFileAgainstManifest({
         fileBytes: testFileBytes,
-        fileName: "swarmtrace-client-v1.0.0.tar.gz",
+        fileName: "penguintrace-client-v1.0.0.tar.gz",
         manifest,
         publisher: { ...publisher, isAuthorized: false },
         onChainRecord: boundRecord(manifest, manifestDigest),
@@ -296,7 +296,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
 
       const verdict = await verifyFileAgainstManifest({
         fileBytes: testFileBytes,
-        fileName: "swarmtrace-client-v1.0.0.tar.gz",
+        fileName: "penguintrace-client-v1.0.0.tar.gz",
         manifest,
         publisher: { ...publisher, ed25519PubKey: `0x${rotatedKey.publicKeyHex}` },
         // Record still carries the key that was authorized when it was registered.
@@ -313,7 +313,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
 
       const verdict = await verifyFileAgainstManifest({
         fileBytes: testFileBytes,
-        fileName: "swarmtrace-client-v1.0.0.tar.gz",
+        fileName: "penguintrace-client-v1.0.0.tar.gz",
         manifest,
         publisher: { ...publisher, ed25519PubKey: `0x${rotatedKey.publicKeyHex}` },
       });
@@ -326,7 +326,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
 
       const verdict = await verifyFileAgainstManifest({
         fileBytes: testFileBytes,
-        fileName: "swarmtrace-client-v1.0.0.tar.gz",
+        fileName: "penguintrace-client-v1.0.0.tar.gz",
         manifest,
         publisher,
         onChainRecord: boundRecord(manifest, manifestDigest, {
@@ -344,7 +344,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
 
     const verdict = await verifyFileAgainstManifest({
       fileBytes: testFileBytes,
-      fileName: "swarmtrace-client-v1.0.0.tar.gz",
+      fileName: "penguintrace-client-v1.0.0.tar.gz",
       manifest,
       publisher,
       networkError: "Connection refused to https://testnet-rpc.monad.xyz",
@@ -361,7 +361,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
 
     const verdict = await verifyFileAgainstManifest({
       fileBytes: tamperedBytes,
-      fileName: "swarmtrace-client-v1.0.0.tar.gz",
+      fileName: "penguintrace-client-v1.0.0.tar.gz",
       manifest,
       publisher: null,
       networkError: "timeout",
@@ -373,11 +373,11 @@ describe("Live Swarm Integrity Verification Engine", () => {
 
   it("detects a truncated file via declared size and localizes the missing piece", async () => {
     const { manifest, manifestDigest } = await createSignedManifest(testFileBytes);
-    const truncated = testFileBytes.slice(0, 16); // drop the whole second piece
+    const truncated = testFileBytes.slice(0, 16); // keep only the first 16-byte piece
 
     const verdict = await verifyFileAgainstManifest({
       fileBytes: truncated,
-      fileName: "swarmtrace-client-v1.0.0.tar.gz",
+      fileName: "penguintrace-client-v1.0.0.tar.gz",
       manifest,
       publisher,
       onChainRecord: boundRecord(manifest, manifestDigest),
@@ -385,20 +385,20 @@ describe("Live Swarm Integrity Verification Engine", () => {
 
     expect(verdict.status).toBe("HASH_MISMATCH");
     expect(verdict.fileIntegrity.expectedFileSize).toBe(testFileBytes.byteLength);
-    expect(verdict.fileIntegrity.chunksTotal).toBe(2);
+    expect(verdict.fileIntegrity.chunksTotal).toBe(Math.ceil(testFileBytes.byteLength / 16));
     expect(verdict.fileIntegrity.chunkDetails![0].status).toBe("MATCH");
-    expect(verdict.fileIntegrity.chunkDetails![1].status).toBe("MISMATCH");
+    expect(verdict.fileIntegrity.chunkDetails!.slice(1).every((c) => c.status === "MISMATCH")).toBe(true);
     expect(verdict.explanations.some((e) => e.includes("manifest declares"))).toBe(true);
   });
 
   it("skips chunk verification when manifest chunk metadata is incomplete or inconsistent", async () => {
     const { manifest } = await createSignedManifest(testFileBytes);
-    // Incomplete chunk metadata: file is 31 bytes, chunkSize is 16, so expected 2 chunks, but only 1 provided
+    // Incomplete chunk metadata: more than one 16-byte piece is expected, but only 1 hash is provided
     manifest.chunkHashes = ["e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"];
 
     const verdict = await verifyFileAgainstManifest({
       fileBytes: testFileBytes,
-      fileName: "swarmtrace-client-v1.0.0.tar.gz",
+      fileName: "penguintrace-client-v1.0.0.tar.gz",
       manifest,
       publisher,
     });

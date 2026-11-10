@@ -653,7 +653,7 @@ export function FileVerifier() {
                   </span>
                 </div>
                 <p className="text-xs text-neutral-600 pl-8">
-                  On-chain lifecycle commitment in SwarmTraceRegistry on Monad Testnet
+                  On-chain lifecycle commitment in PenguinTraceRegistry on Monad Testnet
                 </p>
               </div>
               <div className="pl-8 sm:pl-0">

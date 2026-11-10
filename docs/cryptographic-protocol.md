@@ -1,4 +1,4 @@
-# SwarmTrace Cryptographic Protocol Specification
+# PenguinTrace Cryptographic Protocol Specification
 
 **Specification Version:** 1.0.0 (Phase 1 Architecture Freeze)  
 **Status:** Frozen  
@@ -36,8 +36,8 @@ The signed message payload is defined by the `ReleaseManifestPayload` schema:
 {
   "fileName": "app-v1.0.0.tar.gz",
   "fileSize": 10485760,
-  "productId": "swarmtrace-client",
-  "publisherId": "org.swarmtrace.core",
+  "productId": "penguintrace-client",
+  "publisherId": "org.penguintrace.core",
   "publisherKeyId": "key-2026-v1",
   "releaseVersion": "1.0.0",
   "schemaVersion": "1.0.0",
@@ -59,7 +59,7 @@ The signed message payload is defined by the `ReleaseManifestPayload` schema:
 - **Algorithm:** Ed25519 (Edwards-curve Digital Signature Algorithm over Curve25519) per RFC 8032.
 - **Key Representation:** 32-byte raw public key encoded as a 64-character lowercase hexadecimal string (or prefixed with `0x` in Solidity contract calldata).
 - **Key Identifier (`publisherKeyId`):** A human-readable identifier chosen by the publisher (e.g. `key-2026-v1`) to facilitate key rotation tracking.
-- **On-chain Anchor:** The active Ed25519 public key hash or 32-byte key is stored in `ISwarmTraceRegistry` on Monad Testnet for the corresponding publisher account.
+- **On-chain Anchor:** The active Ed25519 public key hash or 32-byte key is stored in `IPenguinTraceRegistry` on Monad Testnet for the corresponding publisher account.
 
 ---
 

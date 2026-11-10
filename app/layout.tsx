@@ -47,7 +47,7 @@ export default function RootLayout({
                 Monad Testnet (10143)
               </a>
               <span>·</span>
-              <span>SwarmTraceRegistry</span>
+              <span>PenguinTraceRegistry</span>
             </div>
           </div>
         </footer>

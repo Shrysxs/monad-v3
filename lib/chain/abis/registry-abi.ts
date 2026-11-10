@@ -100,7 +100,7 @@ export const REGISTRY_ABI = [
       {
         "name": "",
         "type": "tuple",
-        "internalType": "struct ISwarmTraceRegistry.PublisherInfo",
+        "internalType": "struct IPenguinTraceRegistry.PublisherInfo",
         "components": [
           {
             "name": "publisherAddress",
@@ -146,7 +146,7 @@ export const REGISTRY_ABI = [
       {
         "name": "",
         "type": "tuple",
-        "internalType": "struct ISwarmTraceRegistry.PublisherInfo",
+        "internalType": "struct IPenguinTraceRegistry.PublisherInfo",
         "components": [
           {
             "name": "publisherAddress",
@@ -192,7 +192,7 @@ export const REGISTRY_ABI = [
       {
         "name": "",
         "type": "tuple",
-        "internalType": "struct ISwarmTraceRegistry.ReleaseRecord",
+        "internalType": "struct IPenguinTraceRegistry.ReleaseRecord",
         "components": [
           {
             "name": "releaseDigest",
@@ -242,7 +242,7 @@ export const REGISTRY_ABI = [
           {
             "name": "status",
             "type": "uint8",
-            "internalType": "enum ISwarmTraceRegistry.ReleaseStatus"
+            "internalType": "enum IPenguinTraceRegistry.ReleaseStatus"
           },
           {
             "name": "registeredAt",
@@ -283,7 +283,7 @@ export const REGISTRY_ABI = [
       {
         "name": "",
         "type": "tuple",
-        "internalType": "struct ISwarmTraceRegistry.ReleaseRecord",
+        "internalType": "struct IPenguinTraceRegistry.ReleaseRecord",
         "components": [
           {
             "name": "releaseDigest",
@@ -333,7 +333,7 @@ export const REGISTRY_ABI = [
           {
             "name": "status",
             "type": "uint8",
-            "internalType": "enum ISwarmTraceRegistry.ReleaseStatus"
+            "internalType": "enum IPenguinTraceRegistry.ReleaseStatus"
           },
           {
             "name": "registeredAt",
@@ -369,7 +369,7 @@ export const REGISTRY_ABI = [
       {
         "name": "",
         "type": "uint8",
-        "internalType": "enum ISwarmTraceRegistry.ReleaseStatus"
+        "internalType": "enum IPenguinTraceRegistry.ReleaseStatus"
       }
     ],
     "stateMutability": "view"
@@ -388,7 +388,7 @@ export const REGISTRY_ABI = [
       {
         "name": "",
         "type": "tuple[]",
-        "internalType": "struct ISwarmTraceRegistry.ReleaseRecord[]",
+        "internalType": "struct IPenguinTraceRegistry.ReleaseRecord[]",
         "components": [
           {
             "name": "releaseDigest",
@@ -438,7 +438,7 @@ export const REGISTRY_ABI = [
           {
             "name": "status",
             "type": "uint8",
-            "internalType": "enum ISwarmTraceRegistry.ReleaseStatus"
+            "internalType": "enum IPenguinTraceRegistry.ReleaseStatus"
           },
           {
             "name": "registeredAt",
@@ -818,13 +818,13 @@ export const REGISTRY_ABI = [
         "name": "oldStatus",
         "type": "uint8",
         "indexed": true,
-        "internalType": "enum ISwarmTraceRegistry.ReleaseStatus"
+        "internalType": "enum IPenguinTraceRegistry.ReleaseStatus"
       },
       {
         "name": "newStatus",
         "type": "uint8",
         "indexed": true,
-        "internalType": "enum ISwarmTraceRegistry.ReleaseStatus"
+        "internalType": "enum IPenguinTraceRegistry.ReleaseStatus"
       },
       {
         "name": "reason",
@@ -884,12 +884,12 @@ export const REGISTRY_ABI = [
       {
         "name": "currentStatus",
         "type": "uint8",
-        "internalType": "enum ISwarmTraceRegistry.ReleaseStatus"
+        "internalType": "enum IPenguinTraceRegistry.ReleaseStatus"
       },
       {
         "name": "requestedStatus",
         "type": "uint8",
-        "internalType": "enum ISwarmTraceRegistry.ReleaseStatus"
+        "internalType": "enum IPenguinTraceRegistry.ReleaseStatus"
       }
     ]
   },

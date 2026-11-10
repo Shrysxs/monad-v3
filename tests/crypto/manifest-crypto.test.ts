@@ -22,13 +22,13 @@ describe("RFC 8785 Canonical JSON Serialization (JCS)", () => {
 
   it("omits undefined properties and strips whitespace", () => {
     const objWithUndefined = {
-      name: "SwarmTrace",
+      name: "PenguinTrace",
       version: "1.0.0",
       ignored: undefined,
       nested: { num: 42, empty: undefined },
     };
     const canonical = canonicalizeRfc8785(objWithUndefined);
-    expect(canonical).toBe('{"name":"SwarmTrace","nested":{"num":42},"version":"1.0.0"}');
+    expect(canonical).toBe('{"name":"PenguinTrace","nested":{"num":42},"version":"1.0.0"}');
   });
 
   it("handles arrays deterministically without whitespace", () => {
@@ -50,8 +50,8 @@ describe("Web Crypto API SHA-256 Hashing", () => {
     const emptyHash = await sha256Text("");
     expect(emptyHash).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
 
-    // SHA-256("SwarmTrace") = b45c9be6295325cbf368686ea9a7ffc3a5e840d0246f6f250cf4f58c7041fa3c (computed)
-    const hash = await sha256Text("SwarmTrace");
+    // SHA-256("PenguinTrace") = b45c9be6295325cbf368686ea9a7ffc3a5e840d0246f6f250cf4f58c7041fa3c (computed)
+    const hash = await sha256Text("PenguinTrace");
     expect(hash).toHaveLength(64);
   });
 
@@ -104,10 +104,10 @@ describe("Release Manifest Pipeline & Verification Vectors", () => {
 
   const validPayload: ReleaseManifestPayload = {
     schemaVersion: "1.0.0",
-    publisherId: "org.swarmtrace.core",
-    productId: "swarmtrace-node",
+    publisherId: "org.penguintrace.core",
+    productId: "penguintrace-node",
     releaseVersion: "1.0.0",
-    fileName: "swarmtrace-node-v1.0.0.tar.gz",
+    fileName: "penguintrace-node-v1.0.0.tar.gz",
     fileSize: 1048576,
     sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     publisherKeyId: "key-2026-v1",
@@ -175,7 +175,7 @@ describe("Release Manifest Pipeline & Verification Vectors", () => {
   it("rejects manifests with missing required fields", async () => {
     const missingFieldManifest = {
       schemaVersion: "1.0.0",
-      publisherId: "org.swarmtrace.core",
+      publisherId: "org.penguintrace.core",
       // missing productId
       releaseVersion: "1.0.0",
       fileName: "test.zip",

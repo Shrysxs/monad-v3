@@ -12,16 +12,16 @@ import type {
   RegistryPublisher,
 } from "@/lib/verification/types";
 
-describe("SwarmTrace E2E Cryptographic & Registry Verification Pipeline", () => {
+describe("PenguinTrace E2E Cryptographic & Registry Verification Pipeline", () => {
   const publisherKeyPair = generateEd25519KeyPair();
   const registryPublisher: RegistryPublisher = {
     publisherAddress: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    publisherId: "io.monad.swarmtrace",
+    publisherId: "io.monad.penguintrace",
     ed25519PubKey: `0x${publisherKeyPair.publicKeyHex}`,
     authorizedAt: 0,
     isAuthorized: true,
   };
-  const rawFile = new TextEncoder().encode("Monad Testnet Blitz Hackathon 2026 - SwarmTrace Distribution");
+  const rawFile = new TextEncoder().encode("Monad Testnet Blitz Hackathon 2026 - PenguinTrace Distribution");
 
   async function buildPipelineArtifacts() {
     const fileSha256 = await sha256Bytes(rawFile);
@@ -29,10 +29,10 @@ describe("SwarmTrace E2E Cryptographic & Registry Verification Pipeline", () => 
 
     const payload: ReleaseManifestPayload = {
       schemaVersion: "1.0.0",
-      publisherId: "io.monad.swarmtrace",
-      productId: "swarmtrace-daemon",
+      publisherId: "io.monad.penguintrace",
+      productId: "penguintrace-daemon",
       releaseVersion: "2.1.0",
-      fileName: "swarmtrace-daemon-v2.1.0-linux-x64.tar.gz",
+      fileName: "penguintrace-daemon-v2.1.0-linux-x64.tar.gz",
       fileSize: rawFile.byteLength,
       sha256: fileSha256,
       chunkSize: 16,
@@ -167,15 +167,15 @@ describe("SwarmTrace E2E Cryptographic & Registry Verification Pipeline", () => 
   });
 
   it("calculates deterministic release digest matching Solidity abi.encode exactly", () => {
-    const pId = "org.swarmtrace.core";
-    const prodId = "swarmtrace-client";
+    const pId = "org.penguintrace.core";
+    const prodId = "penguintrace-client";
     const ver = "1.2.0";
     const fHash = "0x4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a" as `0x${string}`;
     const mDigest = "0x8fae8f81a70295da9be68d90faea2050b44cb72e73708bb04cf93f415c138d61" as `0x${string}`;
 
     const digest = calculateReleaseDigest(pId, prodId, ver, fHash, mDigest);
 
-    // Verified against Foundry SwarmTraceRegistry.calculateReleaseDigest
-    expect(digest).toBe("0xa7bbd0212bb7cab8c33e162899c24b0f017076ce2cb35bda5f884af20e982e39");
+    // Verified with: cast keccak $(cast abi-encode "f(string,string,string,bytes32,bytes32)" ...)
+    expect(digest).toBe("0x97d14a5c3dd33862e93689ababe1a76c7b1f945757c5caa0e989be96ce139873");
   });
 });
