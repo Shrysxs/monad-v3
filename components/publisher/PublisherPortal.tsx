@@ -19,7 +19,7 @@ import {
   Info,
   RefreshCw,
 } from "lucide-react";
-import { createWalletClient, custom } from "viem";
+import { createWalletClient, custom, encodeFunctionData, type Hex } from "viem";
 import { monadTestnet, monadPublicClient } from "@/lib/chain/monad";
 import {
   calculateReleaseDigest,
@@ -28,7 +28,7 @@ import {
   fetchRegistryOwner,
   fetchOnChainRelease,
   fetchOnChainReleaseByFileHash,
-  SWARMTRACE_REGISTRY_ABI,
+  REGISTRY_ABI,
 } from "@/lib/chain/contract";
 import { hashFile } from "@/lib/crypto/hash-file";
 import {
@@ -286,8 +286,7 @@ export function PublisherPortal() {
    * Aborts (without sending) if the wallet, network, or contract is not ready.
    */
   async function submitRegistryTx(
-    functionName: string,
-    args: readonly unknown[],
+    data: Hex,
     messages: { submitted: string; confirmed: (block: bigint) => string; failedPrefix: string }
   ): Promise<boolean> {
     setIsSubmitting(true);
@@ -314,13 +313,12 @@ export function PublisherPortal() {
       setStatusMessage("Awaiting transaction approval in wallet...");
 
       const client = createWalletClient({ chain: monadTestnet, transport: custom(ethereum) });
-      const hash = await client.writeContract({
-        address: contractAddress,
-        abi: SWARMTRACE_REGISTRY_ABI,
-        functionName,
-        args,
+      const hash = await client.sendTransaction({
+        to: contractAddress,
+        data,
         account: walletAddress as `0x${string}`,
-      } as any);
+        chain: monadTestnet,
+      });
 
       setConfirmedTxHash(hash);
       setTxPhase("confirming");
@@ -497,8 +495,11 @@ export function PublisherPortal() {
 
     const { manifest, manifestDigest } = regCheck;
     await submitRegistryTx(
-      "registerRelease",
-      [manifest.productId, manifest.releaseVersion, with0x(manifest.sha256), manifestDigest, prev],
+      encodeFunctionData({
+        abi: REGISTRY_ABI,
+        functionName: "registerRelease",
+        args: [manifest.productId, manifest.releaseVersion, with0x(manifest.sha256), manifestDigest, prev],
+      }),
       {
         submitted: "Transaction submitted",
         confirmed: (block) => `Release registered on Monad Testnet in block #${block}.`,
@@ -513,11 +514,18 @@ export function PublisherPortal() {
       setErrorMessage("Please enter the 32-byte release digest to revoke.");
       return;
     }
-    await submitRegistryTx("revokeRelease", [with0x(revokeDigest.trim()), revokeReason], {
-      submitted: "Revocation submitted",
-      confirmed: (block) => `Release revoked on Monad Testnet in block #${block}.`,
-      failedPrefix: "Revocation failed",
-    });
+    await submitRegistryTx(
+      encodeFunctionData({
+        abi: REGISTRY_ABI,
+        functionName: "revokeRelease",
+        args: [with0x(revokeDigest.trim()), revokeReason],
+      }),
+      {
+        submitted: "Revocation submitted",
+        confirmed: (block) => `Release revoked on Monad Testnet in block #${block}.`,
+        failedPrefix: "Revocation failed",
+      }
+    );
   }
 
   async function handleAuthorizePublisher(e: React.FormEvent) {
@@ -537,8 +545,11 @@ export function PublisherPortal() {
       return;
     }
     await submitRegistryTx(
-      "authorizePublisher",
-      [address as `0x${string}`, adminPublisherId.trim(), `0x${key}`],
+      encodeFunctionData({
+        abi: REGISTRY_ABI,
+        functionName: "authorizePublisher",
+        args: [address as `0x${string}`, adminPublisherId.trim(), `0x${key}`],
+      }),
       {
         submitted: "Authorization submitted",
         confirmed: (block) => `Publisher ${adminPublisherId.trim()} authorized in block #${block}.`,
@@ -553,11 +564,18 @@ export function PublisherPortal() {
       setErrorMessage("Enter the publisher address to deauthorize.");
       return;
     }
-    await submitRegistryTx("deauthorizePublisher", [address as `0x${string}`], {
-      submitted: "Deauthorization submitted",
-      confirmed: (block) => `Publisher ${address} deauthorized in block #${block}.`,
-      failedPrefix: "Deauthorization failed",
-    });
+    await submitRegistryTx(
+      encodeFunctionData({
+        abi: REGISTRY_ABI,
+        functionName: "deauthorizePublisher",
+        args: [address as `0x${string}`],
+      }),
+      {
+        submitted: "Deauthorization submitted",
+        confirmed: (block) => `Publisher ${address} deauthorized in block #${block}.`,
+        failedPrefix: "Deauthorization failed",
+      }
+    );
   }
 
   async function handleLookupRelease(e: React.FormEvent) {

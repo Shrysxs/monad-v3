@@ -3,11 +3,12 @@ import {
   keccak256,
   encodeAbiParameters,
   parseAbiParameters,
+  type ContractFunctionReturnType,
   type PublicClient,
   type WalletClient,
 } from "viem";
-import SWARMTRACE_REGISTRY_ABI from "./abis/SwarmTraceRegistry.json";
-import { monadTestnet, monadPublicClient } from "./monad";
+import { REGISTRY_ABI } from "./abis/registry-abi";
+import { monadPublicClient } from "./monad";
 import type {
   ReleaseRecord,
   ReleaseLifecycleStatus,
@@ -15,7 +16,9 @@ import type {
   SignedReleaseManifest,
 } from "../verification/types";
 
-export { SWARMTRACE_REGISTRY_ABI };
+/** @deprecated Use REGISTRY_ABI */
+export const SWARMTRACE_REGISTRY_ABI = REGISTRY_ABI;
+export { REGISTRY_ABI };
 
 /**
  * Calculates canonical release digest matching ISwarmTraceRegistry.sol:
@@ -70,7 +73,7 @@ export function getSwarmTraceRegistryContract(client: PublicClient | WalletClien
   }
   return getContract({
     address,
-    abi: SWARMTRACE_REGISTRY_ABI,
+    abi: REGISTRY_ABI,
     client,
   });
 }
@@ -79,9 +82,11 @@ const STATUS_MAP: ReleaseLifecycleStatus[] = ["UNKNOWN", "ACTIVE", "SUPERSEDED",
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-function toReleaseRecord(result: any): ReleaseRecord | null {
-  if (!result || Number(result.status) === 0) return null;
+type OnChainRelease = ContractFunctionReturnType<typeof REGISTRY_ABI, "view", "getRelease">;
+type OnChainPublisher = ContractFunctionReturnType<typeof REGISTRY_ABI, "view", "getPublisher">;
+
+function toReleaseRecord(result: OnChainRelease): ReleaseRecord | null {
+  if (result.status === 0) return null;
   return {
     releaseDigest: result.releaseDigest,
     publisherAddress: result.publisherAddress,
@@ -90,32 +95,27 @@ function toReleaseRecord(result: any): ReleaseRecord | null {
     releaseVersion: result.releaseVersion,
     fileHash: result.fileHash,
     manifestDigest: result.manifestDigest,
-    signingKey: result.signingKey && result.signingKey !== ZERO_BYTES32 ? result.signingKey : undefined,
+    signingKey: result.signingKey !== ZERO_BYTES32 ? result.signingKey : undefined,
     previousReleaseDigest: result.previousReleaseDigest,
-    status: STATUS_MAP[Number(result.status)] ?? "UNKNOWN",
+    status: STATUS_MAP[result.status] ?? "UNKNOWN",
     registeredAt: Number(result.registeredAt) * 1000,
     revokedAt: result.revokedAt ? Number(result.revokedAt) * 1000 : undefined,
     revokeReason: result.revokeReason || undefined,
   };
 }
 
-function toRegistryPublisher(result: any): RegistryPublisher | null {
-  if (!result || !result.publisherAddress || result.publisherAddress === ZERO_ADDRESS) {
-    return null;
-  }
+function toRegistryPublisher(result: OnChainPublisher): RegistryPublisher | null {
+  if (result.publisherAddress === ZERO_ADDRESS) return null;
   return {
     publisherAddress: result.publisherAddress,
     publisherId: result.publisherId,
     ed25519PubKey: result.ed25519PubKey,
     authorizedAt: Number(result.authorizedAt) * 1000,
-    isAuthorized: Boolean(result.isAuthorized),
+    isAuthorized: result.isAuthorized,
   };
 }
 
-function readRegistry(): any {
-  return getSwarmTraceRegistryContract(monadPublicClient).read;
-}
-/* eslint-enable @typescript-eslint/no-explicit-any */
+const registryAt = () => ({ address: getRegistryAddress(), abi: REGISTRY_ABI }) as const;
 
 /*
  * Read helpers.
@@ -129,7 +129,9 @@ export async function fetchOnChainRelease(
   releaseDigest: `0x${string}`
 ): Promise<ReleaseRecord | null> {
   if (!isRegistryConfigured()) return null;
-  return toReleaseRecord(await readRegistry().getRelease([releaseDigest]));
+  return toReleaseRecord(
+    await monadPublicClient.readContract({ ...registryAt(), functionName: "getRelease", args: [releaseDigest] })
+  );
 }
 
 /**
@@ -142,7 +144,13 @@ export async function fetchOnChainReleaseByFileHash(
   fileHash: `0x${string}`
 ): Promise<ReleaseRecord | null> {
   if (!isRegistryConfigured()) return null;
-  return toReleaseRecord(await readRegistry().getReleaseByFileHash([publisherId, fileHash]));
+  return toReleaseRecord(
+    await monadPublicClient.readContract({
+      ...registryAt(),
+      functionName: "getReleaseByFileHash",
+      args: [publisherId, fileHash],
+    })
+  );
 }
 
 /** Checks whether an address is an authorized publisher. */
@@ -150,13 +158,17 @@ export async function checkPublisherAuthorization(
   publisherAddress: `0x${string}`
 ): Promise<boolean> {
   if (!isRegistryConfigured()) return false;
-  return Boolean(await readRegistry().isAuthorizedPublisher([publisherAddress]));
+  return monadPublicClient.readContract({
+    ...registryAt(),
+    functionName: "isAuthorizedPublisher",
+    args: [publisherAddress],
+  });
 }
 
 /** Reads the registry admin (Ownable owner), who can authorize and deauthorize publishers. */
 export async function fetchRegistryOwner(): Promise<`0x${string}` | null> {
   if (!isRegistryConfigured()) return null;
-  return (await readRegistry().owner()) as `0x${string}`;
+  return monadPublicClient.readContract({ ...registryAt(), functionName: "owner" });
 }
 
 /** @deprecated Use RegistryPublisher from lib/verification/types. */
@@ -165,7 +177,9 @@ export type OnChainPublisherInfo = RegistryPublisher;
 /** Queries publisher information by publisherId. Includes deauthorized publishers (check isAuthorized). */
 export async function fetchPublisherById(publisherId: string): Promise<RegistryPublisher | null> {
   if (!isRegistryConfigured()) return null;
-  return toRegistryPublisher(await readRegistry().getPublisherById([publisherId]));
+  return toRegistryPublisher(
+    await monadPublicClient.readContract({ ...registryAt(), functionName: "getPublisherById", args: [publisherId] })
+  );
 }
 
 /** Queries publisher information by address. Includes deauthorized publishers (check isAuthorized). */
@@ -173,7 +187,9 @@ export async function fetchPublisherByAddress(
   publisherAddress: `0x${string}`
 ): Promise<RegistryPublisher | null> {
   if (!isRegistryConfigured()) return null;
-  return toRegistryPublisher(await readRegistry().getPublisher([publisherAddress]));
+  return toRegistryPublisher(
+    await monadPublicClient.readContract({ ...registryAt(), functionName: "getPublisher", args: [publisherAddress] })
+  );
 }
 
 export interface RegistryTrustAnchors {
