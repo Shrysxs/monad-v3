@@ -51,15 +51,24 @@ export function aggregateRiskIntelligence(params: {
   const now = Date.now();
 
   // 1. Publisher Signature Evidence
-  const sigStatus: EvidenceFindingStatus = signatureVerification.isValid ? "POSITIVE" : "FLAGGED";
+  // A missing registry key means the signature could not be checked at all: that is
+  // absent evidence (UNAVAILABLE), not a failed check (FLAGGED).
+  const sigUnchecked = signatureVerification.status === "KEY_NOT_FOUND";
+  const sigStatus: EvidenceFindingStatus = signatureVerification.isValid
+    ? "POSITIVE"
+    : sigUnchecked
+    ? "UNAVAILABLE"
+    : "FLAGGED";
   findings.push({
     id: "finding-publisher-sig",
     sourceId: signatureVerification.publisherId || "unknown-publisher",
     sourceType: "PUBLISHER",
     title: "Publisher Ed25519 Cryptographic Signature",
     description: signatureVerification.isValid
-      ? `Valid Ed25519 signature verified for "${signatureVerification.publisherId}". Authorship confirmed.`
-      : `Signature verification failed against publisher key (${signatureVerification.publicKeyUsed.slice(0, 10)}...).`,
+      ? `Valid Ed25519 signature verified for "${signatureVerification.publisherId}" against its registered key. Authorship confirmed.`
+      : sigUnchecked
+      ? `Publisher "${signatureVerification.publisherId}" is not registered, so no trusted key exists to check the signature against.`
+      : signatureVerification.message,
     status: sigStatus,
     observedAt: now,
     isStale: false,
@@ -69,7 +78,9 @@ export function aggregateRiskIntelligence(params: {
   explanationSteps.push(
     signatureVerification.isValid
       ? "Publisher authorship verified cryptographically via Ed25519."
-      : "Publisher signature is invalid or altered."
+      : sigUnchecked
+      ? "Publisher is not registered; authorship could not be verified."
+      : "Publisher signature is invalid, altered, or not trusted."
   );
 
   // 2. File Integrity Evidence
@@ -138,6 +149,23 @@ export function aggregateRiskIntelligence(params: {
 
   // 4. Scanner Adapter Status (Honesty Rule: Never fake clean when no scanner ran)
   const isScannerConfigured = !!(scannerConfig?.enabled && scannerConfig?.apiKey);
+  const hasScannerResult = (externalFindings ?? []).some(
+    (f) => f.sourceType === "STATIC_SCANNER" || f.sourceType === "DYNAMIC_SANDBOX"
+  );
+  if (isScannerConfigured && !hasScannerResult) {
+    findings.push({
+      id: "finding-scanner-status",
+      sourceId: "security-scanner-adapter",
+      sourceType: "STATIC_SCANNER",
+      title: "Malware Scanner Integration",
+      description: "A scanner is configured but returned no result for this file. Malware status remains unknown.",
+      status: "UNAVAILABLE",
+      observedAt: now,
+      isStale: false,
+      demoOnly: false,
+    });
+    explanationSteps.push("Scanner configured but produced no result. Malware status remains unknown.");
+  }
   if (!isScannerConfigured) {
     findings.push({
       id: "finding-scanner-status",
@@ -203,10 +231,19 @@ export function aggregateRiskIntelligence(params: {
     assessment = "CONFLICTING_EVIDENCE";
     assessmentTitle = "Conflicting Evidence";
     summary = "Findings from different sources conflict (e.g. valid publisher signature but integrity or scanner flags).";
-  } else if (signatureVerification.isValid && isHashMatch && (!releaseRecord || releaseRecord.status === "ACTIVE")) {
+  } else if (signatureVerification.isValid && isHashMatch && releaseRecord?.status === "ACTIVE") {
+    // Authenticity requires all three: trusted signature, matching bytes, and an active registry commitment.
     assessment = "AUTHENTICITY_CONFIRMED_SECURITY_UNKNOWN";
     assessmentTitle = "Authenticity Confirmed (Malware Status Unknown)";
     summary = "The file matches the publisher's signed release exactly. Because no third-party malware scanner was executed, malware status remains unknown.";
+  } else if (signatureVerification.isValid && isHashMatch && releaseRecord?.status === "SUPERSEDED") {
+    assessment = "UNKNOWN_PROVENANCE";
+    assessmentTitle = "Authentic but Superseded";
+    summary = "The file matches an authentic release, but the publisher has superseded it with a newer version.";
+  } else if (signatureVerification.isValid && isHashMatch) {
+    assessment = "UNKNOWN_PROVENANCE";
+    assessmentTitle = "Signed but Not Registered";
+    summary = "The manifest signature is valid and the file matches it, but the release is not registered on Monad, so it cannot be checked for revocation.";
   } else {
     assessment = "UNKNOWN_PROVENANCE";
     assessmentTitle = "Unknown Provenance";

@@ -34,6 +34,7 @@ interface ISwarmTraceRegistry {
         string releaseVersion;          // Semantic version string (e.g. "1.0.0")
         bytes32 fileHash;               // SHA-256 digest of the entire file
         bytes32 manifestDigest;         // SHA-256 digest of the canonical RFC 8785 manifest payload
+        bytes32 signingKey;             // Publisher Ed25519 key that was authorized when this release was registered
         bytes32 previousReleaseDigest;  // Predecessor release digest or bytes32(0)
         ReleaseStatus status;           // Current status
         uint256 registeredAt;           // Timestamp when registered
@@ -142,7 +143,12 @@ interface ISwarmTraceRegistry {
 
     function getReleases(bytes32[] calldata digests) external view returns (ReleaseRecord[] memory);
 
-    function getReleaseByFileHash(bytes32 fileHash) external view returns (ReleaseRecord memory);
+    /// @notice Latest release registered by `publisherId` for `fileHash`.
+    /// @dev Scoped per publisher so one publisher can never shadow another publisher's record.
+    function getReleaseByFileHash(string calldata publisherId, bytes32 fileHash)
+        external
+        view
+        returns (ReleaseRecord memory);
 
     function getPublisher(address publisherAddress) external view returns (PublisherInfo memory);
 

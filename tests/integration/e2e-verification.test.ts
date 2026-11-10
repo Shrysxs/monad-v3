@@ -9,10 +9,18 @@ import type {
   SignedReleaseManifest,
   ReleaseManifestPayload,
   ReleaseRecord,
+  RegistryPublisher,
 } from "@/lib/verification/types";
 
 describe("SwarmTrace E2E Cryptographic & Registry Verification Pipeline", () => {
   const publisherKeyPair = generateEd25519KeyPair();
+  const registryPublisher: RegistryPublisher = {
+    publisherAddress: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    publisherId: "io.monad.swarmtrace",
+    ed25519PubKey: `0x${publisherKeyPair.publicKeyHex}`,
+    authorizedAt: 0,
+    isAuthorized: true,
+  };
   const rawFile = new TextEncoder().encode("Monad Testnet Blitz Hackathon 2026 - SwarmTrace Distribution");
 
   async function buildPipelineArtifacts() {
@@ -58,6 +66,7 @@ describe("SwarmTrace E2E Cryptographic & Registry Verification Pipeline", () => 
       releaseVersion: payload.releaseVersion,
       fileHash: `0x${fileSha256}`,
       manifestDigest: `0x${manifestDigest}`,
+      signingKey: `0x${publisherKeyPair.publicKeyHex}`,
       previousReleaseDigest: "0x0000000000000000000000000000000000000000000000000000000000000000",
       status: "ACTIVE",
       registeredAt: Date.now(),
@@ -75,7 +84,7 @@ describe("SwarmTrace E2E Cryptographic & Registry Verification Pipeline", () => 
       fileBytes: rawFile,
       fileName: signedManifest.fileName,
       manifest: signedManifest,
-      publisherPublicKeyHex: publisherKeyPair.publicKeyHex,
+      publisher: registryPublisher,
       onChainRecord,
     });
 
@@ -107,7 +116,7 @@ describe("SwarmTrace E2E Cryptographic & Registry Verification Pipeline", () => 
       fileBytes: tamperedFile,
       fileName: signedManifest.fileName,
       manifest: signedManifest,
-      publisherPublicKeyHex: publisherKeyPair.publicKeyHex,
+      publisher: registryPublisher,
       onChainRecord,
     });
 
@@ -141,7 +150,7 @@ describe("SwarmTrace E2E Cryptographic & Registry Verification Pipeline", () => 
       fileBytes: rawFile,
       fileName: signedManifest.fileName,
       manifest: signedManifest,
-      publisherPublicKeyHex: publisherKeyPair.publicKeyHex,
+      publisher: registryPublisher,
       onChainRecord: revokedRecord,
     });
 

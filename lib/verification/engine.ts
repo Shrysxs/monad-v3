@@ -1,23 +1,155 @@
 import { sha256Bytes } from "../crypto/hashing";
-import { verifyManifestSignature } from "../manifests/manifest";
+import { canonicalizeRfc8785 } from "../crypto/canonicalize";
+import { computeManifestDigest, verifyManifestSignature } from "../manifests/manifest";
 import type {
   SignedReleaseManifest,
   ReleaseRecord,
+  RegistryPublisher,
+  TrustAnchorSource,
   VerificationVerdict,
   FileIntegrityResult,
   ChunkIntegrityResult,
   OverallVerdictStatus,
   EvidenceFinding,
+  SignatureVerificationResult,
 } from "./types";
 
 export interface VerifyFileOptions {
   fileBytes: Uint8Array;
   fileName: string;
   manifest: SignedReleaseManifest;
-  publisherPublicKeyHex: string;
+  /**
+   * Publisher entry from the registry (on-chain, or the demo registry in demo mode).
+   * This is the ONLY source of the verification key. `null`/`undefined` means the
+   * publisher is not registered, so the signature cannot be tied to a trusted key.
+   */
+  publisher?: RegistryPublisher | null;
+  /** Release record looked up by the exact release digest of this manifest. */
   onChainRecord?: ReleaseRecord | null;
-  authorizedPublisherPubKeyHex?: string | null;
   networkError?: string | null;
+  /** Where `publisher` / `onChainRecord` came from. Defaults to MONAD_TESTNET. */
+  trustSource?: TrustAnchorSource;
+}
+
+const strip0x = (hex: string) => hex.toLowerCase().replace(/^0x/, "");
+const shortKey = (hex: string) => `${strip0x(hex).slice(0, 10)}...`;
+
+/**
+ * Checks that an on-chain record commits to exactly this manifest and publisher.
+ * Returns null when bound, or a human-readable reason when it must be rejected.
+ */
+function checkRecordBinding(
+  record: ReleaseRecord,
+  manifest: SignedReleaseManifest,
+  manifestDigestHex: string,
+  publisher: RegistryPublisher | null | undefined
+): string | null {
+  if (strip0x(record.fileHash) !== strip0x(manifest.sha256)) return "fileHash differs from manifest";
+  if (record.publisherId !== manifest.publisherId) return "publisherId mismatch";
+  if (record.productId !== manifest.productId || record.releaseVersion !== manifest.releaseVersion) {
+    return "productId/version mismatch";
+  }
+  if (strip0x(record.manifestDigest) !== strip0x(manifestDigestHex)) return "manifestDigest mismatch";
+  if (publisher && record.publisherAddress.toLowerCase() !== publisher.publisherAddress.toLowerCase()) {
+    return "record was not registered by this publisher's account";
+  }
+  return null;
+}
+
+export interface AuthenticateManifestOptions {
+  manifest: SignedReleaseManifest;
+  publisher?: RegistryPublisher | null;
+  onChainRecord?: ReleaseRecord | null;
+  trustSource?: TrustAnchorSource;
+}
+
+export interface ManifestAuthentication {
+  signatureResult: SignatureVerificationResult;
+  /** Record that commits to exactly this manifest and publisher, or null */
+  boundRecord: ReleaseRecord | null;
+  /** Hex SHA-256 of the canonical manifest payload (no 0x) */
+  manifestDigestHex: string;
+  explanations: string[];
+}
+
+/**
+ * Authenticates a signed manifest against registry trust anchors, without needing the file.
+ *
+ * Shared by every page (verify, risk, release DNA) so trust decisions are made in one place:
+ *  1. computes the canonical manifest digest
+ *  2. binds the on-chain record to this exact manifest and publisher account
+ *  3. picks the verification key from the registry (release key, else current key)
+ *     and checks the signature; unregistered or deauthorized publishers are never trusted.
+ */
+export async function authenticateManifest(
+  options: AuthenticateManifestOptions
+): Promise<ManifestAuthentication> {
+  const { manifest, publisher, onChainRecord, trustSource = "MONAD_TESTNET" } = options;
+  const registryLabel = trustSource === "DEMO_FIXTURE" ? "the demo registry" : "Monad Testnet";
+  const explanations: string[] = [];
+
+  // 1. Canonical manifest digest (needed to bind the on-chain record before choosing a key)
+  const { signature: _sig, ...payload } = manifest;
+  void _sig;
+  const canonicalPayload = canonicalizeRfc8785(payload);
+  const manifestDigestHex = strip0x(await computeManifestDigest(manifest));
+
+  // 2. Bind the on-chain record to this exact manifest + publisher
+  let boundRecord: ReleaseRecord | null = null;
+  if (onChainRecord) {
+    const rejection = checkRecordBinding(onChainRecord, manifest, manifestDigestHex, publisher);
+    if (rejection) {
+      explanations.push(
+        `Security alert: release record rejected due to cryptographic tuple mismatch (${rejection}).`
+      );
+    } else {
+      boundRecord = onChainRecord;
+    }
+  }
+
+  // 3. Resolve the trusted signing key from the registry and verify the signature
+  const unverified = (
+    status: SignatureVerificationResult["status"],
+    message: string
+  ): SignatureVerificationResult => ({
+    status,
+    isValid: false,
+    publisherId: manifest.publisherId,
+    keyId: manifest.publisherKeyId,
+    publicKeyUsed: "",
+    canonicalPayload,
+    computedManifestDigest: manifestDigestHex,
+    message,
+  });
+
+  let signatureResult: SignatureVerificationResult;
+  if (!publisher) {
+    signatureResult = unverified(
+      "KEY_NOT_FOUND",
+      `Publisher "${manifest.publisherId}" is not registered in ${registryLabel}. Without a registered key the manifest signature cannot be authenticated.`
+    );
+  } else if (!publisher.isAuthorized) {
+    signatureResult = unverified(
+      "KEY_REVOKED",
+      `Publisher "${manifest.publisherId}" has been deauthorized in ${registryLabel}. Its signing keys are no longer trusted.`
+    );
+  } else {
+    // A registered release is verified against the key that was authorized when it was
+    // registered, so rotating keys does not invalidate earlier releases. Unregistered
+    // releases can only be checked against the publisher's current key.
+    const releaseKey = boundRecord?.signingKey;
+    const keyHex = releaseKey ?? publisher.ed25519PubKey;
+    const keyLabel = releaseKey
+      ? "the signing key registered with this release"
+      : "the publisher's current registered key";
+    signatureResult = await verifyManifestSignature(manifest, strip0x(keyHex));
+    signatureResult.message = signatureResult.isValid
+      ? `Manifest signature verified against ${keyLabel} (${shortKey(keyHex)}).`
+      : `Manifest signature does not verify against ${keyLabel} (${shortKey(keyHex)}). The manifest was altered or signed by an unauthorized key.`;
+  }
+  explanations.push(signatureResult.message);
+
+  return { signatureResult, boundRecord, manifestDigestHex, explanations };
 }
 
 /**
@@ -30,11 +162,13 @@ export async function verifyFileAgainstManifest(
     fileBytes,
     fileName,
     manifest,
-    publisherPublicKeyHex,
+    publisher,
     onChainRecord,
-    authorizedPublisherPubKeyHex,
     networkError,
+    trustSource = "MONAD_TESTNET",
   } = options;
+  const isDemo = trustSource === "DEMO_FIXTURE";
+  const registryLabel = isDemo ? "the demo registry" : "Monad Testnet";
 
   const explanations: string[] = [];
   const caveats: string[] = [
@@ -42,39 +176,31 @@ export async function verifyFileAgainstManifest(
     "A hash mismatch proves the file differs from the reference artifact; it does not automatically indicate malicious intent.",
     "A filename is an informational display label and is never proof of publisher identity.",
   ];
-
-  // 1. Verify Manifest Signature
-  const signatureResult = await verifyManifestSignature(manifest, publisherPublicKeyHex);
-
-  // Cross-check publisher key authorization against Monad registry binding
-  if (signatureResult.isValid && authorizedPublisherPubKeyHex) {
-    const normAuthorized = authorizedPublisherPubKeyHex.toLowerCase().replace(/^0x/, "");
-    const normUsed = publisherPublicKeyHex.toLowerCase().replace(/^0x/, "");
-    if (normAuthorized !== normUsed) {
-      signatureResult.isValid = false;
-      signatureResult.status = "KEY_UNAUTHORIZED";
-      signatureResult.message = `The key used to verify the manifest (${normUsed.slice(0, 10)}...) is not the authorized signing key registered on Monad (${normAuthorized.slice(0, 10)}...).`;
-    }
+  if (isDemo) {
+    caveats.push("Publisher keys and release records in this result come from local demo fixtures, not from Monad Testnet.");
   }
 
-  if (!signatureResult.isValid) {
-    explanations.push(
-      signatureResult.status === "KEY_UNAUTHORIZED"
-        ? signatureResult.message
-        : `Manifest signature verification failed against publisher key (${publisherPublicKeyHex.slice(0, 10)}...). The manifest is invalid or was altered.`
-    );
-  } else {
-    explanations.push(
-      `Manifest signature is valid and authentic for publisher "${manifest.publisherId}" using key "${manifest.publisherKeyId}".`
-    );
-  }
+  // 1-3. Authenticate the manifest (record binding + registry key + signature)
+  const auth = await authenticateManifest({ manifest, publisher, onChainRecord, trustSource });
+  const { signatureResult, boundRecord } = auth;
+  explanations.push(...auth.explanations);
 
-  // 2. Compute Whole-File SHA-256
+  // 4. Compute Whole-File SHA-256
   const computedSha256 = await sha256Bytes(fileBytes);
   const expectedSha256 = manifest.sha256.toLowerCase();
   const isHashMatch = computedSha256 === expectedSha256;
 
-  // 3. Piece/Chunk Verification ONLY when manifest provides valid and complete chunk metadata
+  // Declared size vs actual size (a size difference alone proves the bytes differ)
+  const isSizeMatch = manifest.fileSize === fileBytes.byteLength;
+  if (!isSizeMatch) {
+    explanations.push(
+      `File size is ${fileBytes.byteLength} bytes, but the manifest declares ${manifest.fileSize} bytes (${
+        fileBytes.byteLength > manifest.fileSize ? "+" : ""
+      }${fileBytes.byteLength - manifest.fileSize} bytes).`
+    );
+  }
+
+  // 5. Piece/Chunk Verification ONLY when manifest provides valid and complete chunk metadata
   let chunkDetails: ChunkIntegrityResult[] | undefined;
   let chunksMatched = 0;
   let chunksTotal = 0;
@@ -85,11 +211,13 @@ export async function verifyFileAgainstManifest(
     Array.isArray(manifest.chunkHashes) &&
     manifest.chunkHashes.length > 0;
 
+  // Chunk layout follows the size the publisher declared, so pieces can still be
+  // compared (and missing/extra bytes localized) when the local file changed length.
   const expectedChunkCount =
     manifest.chunkSize && manifest.chunkSize > 0
-      ? fileBytes.byteLength === 0
+      ? manifest.fileSize === 0
         ? 0
-        : Math.ceil(fileBytes.byteLength / manifest.chunkSize)
+        : Math.ceil(manifest.fileSize / manifest.chunkSize)
       : -1;
 
   const isChunkMetaComplete =
@@ -101,7 +229,7 @@ export async function verifyFileAgainstManifest(
 
   if (hasChunkMeta && !isChunkMetaComplete) {
     explanations.push(
-      `Chunk verification skipped: Manifest chunk metadata is incomplete or inconsistent with file size (${manifest.chunkHashes?.length ?? 0} chunk hashes provided, expected ${expectedChunkCount}).`
+      `Chunk verification skipped: Manifest chunk metadata is incomplete or inconsistent with the declared file size (${manifest.chunkHashes?.length ?? 0} chunk hashes provided, expected ${expectedChunkCount}).`
     );
   } else if (isChunkMetaComplete && manifest.chunkSize) {
     chunksTotal = manifest.chunkHashes!.length;
@@ -110,8 +238,8 @@ export async function verifyFileAgainstManifest(
 
     for (let i = 0; i < chunksTotal; i++) {
       const byteStart = i * chunkSize;
-      const byteEnd = Math.min(byteStart + chunkSize, fileBytes.byteLength);
-      const pieceSlice = fileBytes.subarray(byteStart, byteEnd);
+      const byteEnd = Math.min(byteStart + chunkSize, manifest.fileSize, fileBytes.byteLength);
+      const pieceSlice = fileBytes.subarray(Math.min(byteStart, fileBytes.byteLength), Math.max(byteEnd, byteStart));
       const pieceHash = await sha256Bytes(pieceSlice);
       const expectedPieceHash = manifest.chunkHashes![i].toLowerCase().replace(/^0x/, "");
 
@@ -131,12 +259,18 @@ export async function verifyFileAgainstManifest(
     explanations.push(
       `Chunk verification: ${chunksMatched} of ${chunksTotal} pieces match the publisher manifest.`
     );
+    if (fileBytes.byteLength > manifest.fileSize) {
+      explanations.push(
+        `${fileBytes.byteLength - manifest.fileSize} trailing bytes beyond the declared size are not covered by any manifest piece.`
+      );
+    }
   }
 
   const fileIntegrity: FileIntegrityResult = {
     status: isHashMatch ? "MATCH" : "MISMATCH",
     fileName,
     fileSize: fileBytes.byteLength,
+    expectedFileSize: manifest.fileSize,
     computedSha256,
     expectedSha256,
     chunksTotal: chunksTotal > 0 ? chunksTotal : undefined,
@@ -153,72 +287,48 @@ export async function verifyFileAgainstManifest(
     explanations.push("Computed whole-file SHA-256 differs from expected manifest reference.");
   }
 
-  // 4. On-chain Record Evaluation & Strict Cryptographic Binding Check
-  let onChainStatus: "ACTIVE" | "SUPERSEDED" | "REVOKED" | "UNKNOWN" = "UNKNOWN";
-  if (onChainRecord) {
-    const normRecordFileHash = onChainRecord.fileHash.toLowerCase().replace(/^0x/, "");
-    const normManifestFileHash = manifest.sha256.toLowerCase().replace(/^0x/, "");
-    const isFileHashBound = normRecordFileHash === normManifestFileHash;
-
-    const isPublisherBound = onChainRecord.publisherId === manifest.publisherId;
-    const isProductBound = onChainRecord.productId === manifest.productId;
-    const isVersionBound = onChainRecord.releaseVersion === manifest.releaseVersion;
-
-    const normRecordManifestDigest = onChainRecord.manifestDigest.toLowerCase().replace(/^0x/, "");
-    const normComputedManifestDigest = signatureResult.computedManifestDigest.toLowerCase().replace(/^0x/, "");
-    const isManifestDigestBound =
-      !normRecordManifestDigest ||
-      normRecordManifestDigest === "0000000000000000000000000000000000000000000000000000000000000000" ||
-      normRecordManifestDigest === normComputedManifestDigest;
-
-    const isCryptographicallyBound =
-      isFileHashBound && isPublisherBound && isProductBound && isVersionBound && isManifestDigestBound;
-
-    if (!isCryptographicallyBound) {
-      onChainStatus = "UNKNOWN";
+  // 6. On-chain release status (only from a record bound to this manifest)
+  const onChainStatus: "ACTIVE" | "SUPERSEDED" | "REVOKED" | "UNKNOWN" = boundRecord
+    ? boundRecord.status
+    : "UNKNOWN";
+  if (boundRecord) {
+    explanations.push(`Release record verified in ${registryLabel}: status is ${onChainStatus}.`);
+    if (onChainStatus === "REVOKED") {
       explanations.push(
-        `Security alert: On-chain release record rejected due to cryptographic tuple mismatch (${
-          !isFileHashBound
-            ? "fileHash differs from manifest"
-            : !isPublisherBound
-            ? "publisherId mismatch"
-            : !isManifestDigestBound
-            ? "manifestDigest mismatch"
-            : "productId/version mismatch"
-        }).`
+        `WARNING: Release was revoked by the publisher. Reason: "${boundRecord.revokeReason || "No reason specified"}".`
       );
-    } else {
-      onChainStatus = onChainRecord.status;
-      explanations.push(
-        `On-chain release record verified on Monad Testnet: Status is ${onChainStatus}.`
-      );
-      if (onChainStatus === "REVOKED") {
-        explanations.push(
-          `WARNING: Release was revoked on-chain by the publisher. Reason: "${onChainRecord.revokeReason || "No reason specified"}".`
-        );
-      }
     }
-  } else if (!networkError) {
-    explanations.push("No corresponding release commitment was found on Monad Testnet.");
+  } else if (!onChainRecord && !networkError) {
+    explanations.push(`No release commitment for this exact manifest was found in ${registryLabel}.`);
   }
 
-  // 5. Synthesize Overall Verdict Status
+  // 7. Synthesize Overall Verdict Status
   let overallStatus: OverallVerdictStatus;
   let summary: string;
 
+  // Order matters: anything proven locally (an invalid signature, altered bytes) is
+  // reported before registry availability, so an RPC outage never hides tampering.
   if (networkError) {
-    overallStatus = "NETWORK_ERROR";
-    summary = `Network error communicating with Monad Testnet: ${networkError}. On-chain verification could not be completed.`;
     explanations.push(`Network communication error: ${networkError}`);
-  } else if (signatureResult.status === "KEY_UNAUTHORIZED") {
+  }
+
+  if (signatureResult.status === "KEY_REVOKED" || signatureResult.status === "KEY_UNAUTHORIZED") {
     overallStatus = "UNAUTHORIZED_KEY";
-    summary = "The key used to verify the manifest is not authorized for this publisher on Monad Testnet.";
-  } else if (!signatureResult.isValid) {
+    summary = `Publisher "${manifest.publisherId}" is not currently authorized in ${registryLabel}; its signatures are not trusted.`;
+  } else if (signatureResult.status === "INVALID" || signatureResult.status === "ERROR") {
     overallStatus = "INVALID_MANIFEST_SIGNATURE";
     summary = "Manifest signature is invalid. The release manifest cannot be authenticated.";
-  } else if (!isHashMatch) {
+  } else if (!isHashMatch || !isSizeMatch) {
     overallStatus = "HASH_MISMATCH";
-    summary = "The local file contents do not match the publisher-signed manifest.";
+    summary = networkError
+      ? "The local file contents do not match the manifest. (The registry was unreachable, so the manifest itself could not be authenticated either.)"
+      : "The local file contents do not match the publisher-signed manifest.";
+  } else if (networkError) {
+    overallStatus = "NETWORK_ERROR";
+    summary = `Network error communicating with Monad Testnet: ${networkError}. The file matches the manifest, but the publisher key and release status could not be verified.`;
+  } else if (signatureResult.status === "KEY_NOT_FOUND") {
+    overallStatus = "UNKNOWN_RELEASE";
+    summary = `Publisher "${manifest.publisherId}" is not registered in ${registryLabel}, so this manifest cannot be authenticated.`;
   } else if (onChainStatus === "REVOKED") {
     overallStatus = "REVOKED_RELEASE";
     summary = "File matches manifest, but this release has been explicitly revoked on Monad.";
@@ -227,11 +337,11 @@ export async function verifyFileAgainstManifest(
     summary = "File matches manifest, but this release has been superseded by a newer version.";
   } else if (onChainStatus === "ACTIVE") {
     overallStatus = "MATCHING_AUTHENTICATED_RELEASE";
-    summary = "File matches an authentic, active publisher release registered on Monad Testnet.";
+    summary = `File matches an authentic, active publisher release registered in ${registryLabel}.`;
   } else {
     // Valid signature and hash match, but no record found on-chain
     overallStatus = "UNKNOWN_RELEASE";
-    summary = "Manifest is signed, but no active release record was verified on Monad Testnet.";
+    summary = `Manifest signature is valid, but this release is not registered in ${registryLabel}.`;
   }
 
   // Initial evidence findings
@@ -242,10 +352,14 @@ export async function verifyFileAgainstManifest(
       sourceType: "PUBLISHER",
       title: "Publisher Ed25519 Signature",
       description: signatureResult.message,
-      status: signatureResult.isValid ? "POSITIVE" : "FLAGGED",
+      status: signatureResult.isValid
+        ? "POSITIVE"
+        : signatureResult.status === "KEY_NOT_FOUND"
+        ? "UNAVAILABLE"
+        : "FLAGGED",
       observedAt: Date.now(),
       isStale: false,
-      demoOnly: false,
+      demoOnly: isDemo,
     },
     {
       id: "ev-integrity-sha256",
@@ -263,9 +377,9 @@ export async function verifyFileAgainstManifest(
       sourceId: "monad-testnet-registry",
       sourceType: "ONCHAIN_REGISTRY",
       title: "Monad Release Status",
-      description: onChainRecord
-        ? `Status: ${onChainStatus} (Registered at block ${onChainRecord.blockNumber ?? "latest"})`
-        : "No release commitment found on Monad Testnet registry.",
+      description: boundRecord
+        ? `Status: ${onChainStatus} (Registered at block ${boundRecord.blockNumber ?? "latest"})`
+        : `No release commitment for this manifest found in ${registryLabel}.`,
       status:
         onChainStatus === "ACTIVE"
           ? "POSITIVE"
@@ -276,7 +390,7 @@ export async function verifyFileAgainstManifest(
           : "UNAVAILABLE",
       observedAt: Date.now(),
       isStale: false,
-      demoOnly: false,
+      demoOnly: isDemo,
     },
     {
       id: "ev-security-scanner",
@@ -296,7 +410,8 @@ export async function verifyFileAgainstManifest(
     summary,
     fileIntegrity,
     signatureVerification: signatureResult,
-    releaseRecord: onChainRecord ?? undefined,
+    releaseRecord: boundRecord ?? undefined,
+    trustSource,
     findings,
     explanations,
     caveats,

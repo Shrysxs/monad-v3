@@ -17,18 +17,20 @@ The application computes file digests locally in the browser, checks detached Ed
 
 ## How verification works
 
-Verification follows a five-step sequence:
+Verification follows these steps:
 
 1. **File selection and local hashing:** The user drops or selects a file. The browser reads the bytes through the Web Crypto API and computes its whole-file SHA-256 digest, along with sequential piece hashes if a chunk size is defined.
 2. **Digest comparison:** The computed hash is compared against the expected digest declared in the release manifest. If they differ, the verification halts with a `HASH_MISMATCH` status and highlights the altered pieces.
-3. **Manifest validation and signature check:** The manifest JSON is parsed and canonicalized according to RFC 8785. The detached Ed25519 signature is verified against the publisher's declared public key. If the signature does not match the canonical bytes, the result returns `INVALID_MANIFEST_SIGNATURE`.
-4. **On-chain registry inspection:** The registry contract on Monad Testnet is queried by publisher ID and file hash. The check verifies whether the signing key is authorized, whether the release commitment exists, whether an older version was superseded, or whether the release was marked `REVOKED`.
-5. **Verdict classification:** The engine returns one of seven discrete states:
+3. **Trusted key resolution:** The verification key is never typed in by the user or taken from the manifest. The registry is queried for the publisher entry matching the manifest's `publisherId`, and for the release record matching the exact release digest computed from the manifest. If the publisher is not registered the result is `UNKNOWN_RELEASE`; if the publisher has been deauthorized it is `UNAUTHORIZED_KEY`.
+4. **Signature check:** The manifest is canonicalized according to RFC 8785 and the detached Ed25519 signature is verified. A registered release is checked against the signing key recorded with that release on-chain, so key rotation does not invalidate earlier releases. An unregistered release is checked against the publisher's current key. A failed check returns `INVALID_MANIFEST_SIGNATURE`.
+5. **Release status:** A release record is trusted only if it commits to exactly this manifest (publisher, product, version, file hash, manifest digest) and was registered by the publisher's account. Its status determines whether the release is active, superseded, or `REVOKED`.
+6. **Verdict classification:** The engine returns one of these states:
    - `MATCHING_AUTHENTICATED_RELEASE`
    - `HASH_MISMATCH`
    - `INVALID_MANIFEST_SIGNATURE`
    - `UNAUTHORIZED_KEY`
    - `REVOKED_RELEASE`
+   - `SUPERSEDED_RELEASE`
    - `UNKNOWN_RELEASE`
    - `NETWORK_ERROR`
 
@@ -47,6 +49,8 @@ Penguin Trace uses Monad Testnet to run an immutable, append-only registry contr
 
 - Authorized publisher IDs and their corresponding Ed25519 public keys
 - Deterministic release digests (`keccak256(publisherId, productId, releaseVersion, fileHash, manifestDigest)`)
+- The Ed25519 signing key that was authorized when each release was registered
+- Per-publisher file-hash indexes, so one publisher can never shadow another publisher's records
 - Version lineage pointers (`previousReleaseDigest`) to track supersession
 - Permanent revocation flags and explanations
 
@@ -56,7 +60,9 @@ This creates an independently verifiable public ledger of release history that a
 - **Deployment Transaction:** [`0x037d4996320061039d5632c7cede5bb021fcdb29446ddbcf3e10fea63ff820f9`](https://testnet.monadscan.com/tx/0x037d4996320061039d5632c7cede5bb021fcdb29446ddbcf3e10fea63ff820f9)
 - **Network:** Monad Testnet (Chain ID `10143`)
 
-*Note: The contract bytecode is deployed and verified on testnet. Live publisher authorizations and production release commitments have not yet been broadcast to this contract instance; the application uses local fixtures for demonstration.*
+*Note: The registry interface changed (per-release `signingKey`, publisher-scoped `getReleaseByFileHash`). The contract at the address above predates that change and must be redeployed with `contracts/script/DeploySwarmTrace.s.sol`, then `NEXT_PUBLIC_SWARMTRACE_REGISTRY_ADDRESS` updated.*
+
+*The contract bytecode is deployed and verified on testnet. Live publisher authorizations and production release commitments have not yet been broadcast to this contract instance; the application uses local fixtures for demonstration.*
 
 ## Tech stack
 
@@ -143,7 +149,7 @@ The repository includes test suites for both frontend cryptographic logic and sm
 npm test
 ```
 
-Runs 42 tests across 6 test suites:
+Runs 54 tests across 6 test suites:
 - `tests/crypto/manifest-crypto.test.ts`: RFC 8785 canonicalization, key ordering, SHA-256 digests, and detached Ed25519 signature verification.
 - `tests/verification/engine.test.ts`: Local file hashing, piece matching, status outcome resolution, and corrupt chunk isolation.
 - `tests/risk/release-dna.test.ts`: Variant comparison rules, chunk diff calculations, and lineage graph generation.
@@ -157,9 +163,11 @@ Runs 42 tests across 6 test suites:
 npm run contracts:test
 ```
 
-Runs 18 Solidity tests in `contracts/test/SwarmTraceRegistry.t.sol`:
+Runs 29 Solidity tests in `contracts/test/SwarmTraceRegistry.t.sol`:
 - Publisher authorization and deauthorization by contract owner
 - Release commitment registration and collision resistance
+- Per-release signing key recording across key rotation
+- Publisher-scoped file-hash lookups that cannot be shadowed by another publisher
 - Automatic version supersession
 - Revocation permanence and prevention of re-revoking
 - Access control enforcement (unauthorized callers cannot register releases or revoke other publishers' records)

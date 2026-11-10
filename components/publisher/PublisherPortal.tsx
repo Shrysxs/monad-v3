@@ -64,6 +64,7 @@ export function PublisherPortal() {
 
   // Lookup form
   const [lookupQuery, setLookupQuery] = useState<string>("");
+  const [lookupPublisherId, setLookupPublisherId] = useState<string>("");
   const [isLookingUp, setIsLookingUp] = useState<boolean>(false);
   const [lookupRecord, setLookupRecord] = useState<ReleaseRecord | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
@@ -465,15 +466,21 @@ export function PublisherPortal() {
       const cleanInput = lookupQuery.trim().toLowerCase();
       const formatted = (cleanInput.startsWith("0x") ? cleanInput : `0x${cleanInput}`) as `0x${string}`;
 
-      let record = await fetchOnChainReleaseByFileHash(formatted);
-      if (!record) {
-        record = await fetchOnChainRelease(formatted);
+      // Exact release digest first. File-hash lookups are always scoped to a publisher,
+      // so another publisher registering the same hash can never answer the query.
+      let record = await fetchOnChainRelease(formatted);
+      if (!record && lookupPublisherId.trim()) {
+        record = await fetchOnChainReleaseByFileHash(lookupPublisherId.trim(), formatted);
       }
 
       if (record) {
         setLookupRecord(record);
       } else {
-        setLookupError("No release record found in registry for this query.");
+        setLookupError(
+          lookupPublisherId.trim()
+            ? "No release record found for this digest, or for this file hash under that publisher."
+            : "No release found for this digest. To look up by file SHA-256, also enter the publisher ID."
+        );
       }
     } catch (err: any) {
       setLookupError("Registry query error: " + (err.message || String(err)));
@@ -1011,14 +1018,22 @@ export function PublisherPortal() {
         <form onSubmit={handleLookupRelease} className="rounded-xl border border-neutral-200 bg-white p-6 space-y-4 shadow-sm animate-in fade-in duration-200">
           <div className="space-y-1">
             <h4 className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider">
-              Query Registry by Digest or File Hash
+              Query Registry by Release Digest or Publisher + File Hash
             </h4>
             <p className="text-xs text-neutral-500">
-              Query live commitments recorded on Monad Testnet (<code className="font-mono">0xeB3Ef...</code>).
+              Query live commitments recorded on Monad Testnet (<code className="font-mono">{contractAddress.slice(0, 8)}...</code>).
+              File-hash lookups require the publisher ID.
             </p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              placeholder="Publisher ID (only for file-hash lookup)"
+              value={lookupPublisherId}
+              onChange={(e) => setLookupPublisherId(e.target.value)}
+              className="sm:w-56 rounded-md bg-white border border-neutral-200 px-3 py-2 font-mono text-xs text-neutral-950 focus:outline-none focus:border-neutral-950"
+            />
             <input
               type="text"
               placeholder="0x... release digest or file SHA-256"

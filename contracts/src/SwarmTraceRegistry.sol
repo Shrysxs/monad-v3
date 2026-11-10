@@ -22,8 +22,10 @@ contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
     /// @notice Release commitment digest => Release record
     mapping(bytes32 => ReleaseRecord) private _releases;
 
-    /// @notice File SHA-256 hash => Release commitment digest
-    mapping(bytes32 => bytes32) private _fileHashToReleaseDigest;
+    /// @notice Publisher account => file SHA-256 hash => latest release commitment digest.
+    /// @dev Scoped per publisher: a global mapping would let any authorized publisher
+    ///      overwrite (shadow) another publisher's file-hash lookup.
+    mapping(address => mapping(bytes32 => bytes32)) private _fileHashToReleaseDigest;
 
     // --- Modifiers ---
 
@@ -61,6 +63,13 @@ contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
         address existingOwner = _publisherIdToAddress[publisherId];
         if (existingOwner != address(0) && existingOwner != publisher) {
             revert PublisherIdAlreadyRegistered(publisherId);
+        }
+
+        // An account keeps its publisherId for life. Renaming would leave the old id
+        // pointing at this account and detach every release registered under it.
+        string memory currentId = _publishers[publisher].publisherId;
+        if (bytes(currentId).length != 0 && keccak256(bytes(currentId)) != keccak256(bytes(publisherId))) {
+            revert PublisherAlreadyExists(currentId);
         }
 
         _publishers[publisher] = PublisherInfo({
@@ -182,6 +191,7 @@ contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
             releaseVersion: releaseVersion,
             fileHash: fileHash,
             manifestDigest: manifestDigest,
+            signingKey: publisher.ed25519PubKey,
             previousReleaseDigest: previousReleaseDigest,
             status: ReleaseStatus.Active,
             registeredAt: block.timestamp,
@@ -189,7 +199,7 @@ contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
             revokeReason: ""
         });
 
-        _fileHashToReleaseDigest[fileHash] = releaseDigest;
+        _fileHashToReleaseDigest[msg.sender][fileHash] = releaseDigest;
 
         emit ReleaseRegistered(
             releaseDigest,
@@ -259,8 +269,21 @@ contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
         if (newRelease.status == ReleaseStatus.Unknown) {
             revert ReleaseNotFound(newReleaseDigest);
         }
+        if (oldReleaseDigest == newReleaseDigest) {
+            revert InvalidStatusTransition(oldRelease.status, ReleaseStatus.Superseded);
+        }
         if (oldRelease.status == ReleaseStatus.Revoked) {
             revert InvalidStatusTransition(ReleaseStatus.Revoked, ReleaseStatus.Superseded);
+        }
+        // The replacement must be a live release of the same product by the same publisher.
+        if (newRelease.status == ReleaseStatus.Revoked) {
+            revert InvalidStatusTransition(ReleaseStatus.Revoked, ReleaseStatus.Active);
+        }
+        if (
+            newRelease.publisherAddress != oldRelease.publisherAddress ||
+            keccak256(bytes(newRelease.productId)) != keccak256(bytes(oldRelease.productId))
+        ) {
+            revert ProductMismatch(newReleaseDigest);
         }
 
         if (msg.sender != oldRelease.publisherAddress && msg.sender != owner()) {
@@ -300,8 +323,12 @@ contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
         return records;
     }
 
-    function getReleaseByFileHash(bytes32 fileHash) external view override returns (ReleaseRecord memory) {
-        bytes32 digest = _fileHashToReleaseDigest[fileHash];
+    function getReleaseByFileHash(
+        string calldata publisherId,
+        bytes32 fileHash
+    ) external view override returns (ReleaseRecord memory) {
+        address publisher = _publisherIdToAddress[publisherId];
+        bytes32 digest = _fileHashToReleaseDigest[publisher][fileHash];
         return _releases[digest];
     }
 

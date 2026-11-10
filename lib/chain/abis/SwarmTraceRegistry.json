@@ -229,6 +229,11 @@
             "internalType": "bytes32"
           },
           {
+            "name": "signingKey",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
             "name": "previousReleaseDigest",
             "type": "bytes32",
             "internalType": "bytes32"
@@ -262,6 +267,11 @@
     "type": "function",
     "name": "getReleaseByFileHash",
     "inputs": [
+      {
+        "name": "publisherId",
+        "type": "string",
+        "internalType": "string"
+      },
       {
         "name": "fileHash",
         "type": "bytes32",
@@ -306,6 +316,11 @@
           },
           {
             "name": "manifestDigest",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "signingKey",
             "type": "bytes32",
             "internalType": "bytes32"
           },
@@ -406,6 +421,11 @@
           },
           {
             "name": "manifestDigest",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "signingKey",
             "type": "bytes32",
             "internalType": "bytes32"
           },

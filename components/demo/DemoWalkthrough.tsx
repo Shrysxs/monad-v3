@@ -17,7 +17,8 @@ import {
   Copy,
   CheckCheck,
 } from "lucide-react";
-import { getDemoFixtures, DEMO_PUBLISHER, type DemoFixtureItem } from "@/lib/demo-data/fixtures";
+import { getDemoFixtures, type DemoFixtureItem } from "@/lib/demo-data/fixtures";
+import { buildArtifactProfile } from "@/lib/risk/artifact-profile";
 import { verifyFileAgainstManifest } from "@/lib/verification/engine";
 import { compareArtifacts, type ReleaseDnaComparison } from "@/lib/risk/release-dna";
 import { aggregateRiskIntelligence, type RiskIntelligenceReport } from "@/lib/risk/evidence";
@@ -65,16 +66,16 @@ export function DemoWalkthrough() {
             fileBytes: authentic.fileBytes,
             fileName: authentic.fileName,
             manifest: authentic.manifest,
-            publisherPublicKeyHex: DEMO_PUBLISHER.publicKeyHex,
+            publisher: authentic.publisher,
             onChainRecord: authentic.releaseRecord,
-            authorizedPublisherPubKeyHex: DEMO_PUBLISHER.publicKeyHex,
+            trustSource: "DEMO_FIXTURE",
           });
           setStep1Verdict(v1);
 
           const r4 = aggregateRiskIntelligence({
             fileIntegrity: v1.fileIntegrity,
             signatureVerification: v1.signatureVerification,
-            releaseRecord: authentic.releaseRecord,
+            releaseRecord: v1.releaseRecord,
             scannerConfig: { enabled: false },
           });
           setStep4Report(r4);
@@ -85,34 +86,25 @@ export function DemoWalkthrough() {
             fileBytes: tampered.fileBytes,
             fileName: tampered.fileName,
             manifest: tampered.manifest,
-            publisherPublicKeyHex: DEMO_PUBLISHER.publicKeyHex,
+            publisher: tampered.publisher,
             onChainRecord: tampered.releaseRecord,
-            authorizedPublisherPubKeyHex: DEMO_PUBLISHER.publicKeyHex,
+            trustSource: "DEMO_FIXTURE",
           });
           setStep2Verdict(v2);
         }
 
         if (authentic && repacked) {
-          const comp = compareArtifacts(
-            {
-              id: authentic.id,
-              fileName: authentic.fileName,
-              fileSize: authentic.fileBytes.byteLength,
-              sha256: authentic.manifest.sha256,
-              manifest: authentic.manifest,
-              releaseRecord: authentic.releaseRecord,
-              isDemo: true,
-            },
-            {
-              id: repacked.id,
-              fileName: repacked.fileName,
-              fileSize: repacked.fileBytes.byteLength,
-              sha256: "deadbeef777788889999aaaabbbbccccddddeeeeffff00001111222233334444",
-              manifest: undefined,
-              releaseRecord: undefined,
-              isDemo: true,
-            }
-          );
+          const toProfile = (f: DemoFixtureItem) =>
+            buildArtifactProfile({
+              id: f.id,
+              fileName: f.fileName,
+              fileBytes: f.fileBytes,
+              manifest: f.manifest,
+              publisher: f.publisher,
+              onChainRecord: f.releaseRecord,
+              trustSource: "DEMO_FIXTURE",
+            });
+          const comp = compareArtifacts(await toProfile(authentic), await toProfile(repacked));
           setStep3Comparison(comp);
         }
       } catch (err) {

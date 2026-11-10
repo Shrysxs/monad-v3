@@ -185,4 +185,24 @@ describe("Swarm Risk Intelligence Aggregator", () => {
     });
     expect(unsignedReport.provenanceScore).toBe(40);
   });
+
+  it("does not confirm authenticity when no registry record exists", () => {
+    const report = aggregateRiskIntelligence({
+      fileIntegrity: cleanIntegrityMatch,
+      signatureVerification: validSignature,
+      releaseRecord: null,
+    });
+    expect(report.assessment).toBe("UNKNOWN_PROVENANCE");
+    expect(report.assessmentTitle).toBe("Signed but Not Registered");
+  });
+
+  it("treats an unregistered publisher as missing evidence, not a conflict", () => {
+    const report = aggregateRiskIntelligence({
+      fileIntegrity: cleanIntegrityMatch,
+      signatureVerification: { ...validSignature, status: "KEY_NOT_FOUND", isValid: false },
+      releaseRecord: null,
+    });
+    expect(report.assessment).toBe("UNKNOWN_PROVENANCE");
+    expect(report.hasConflictingFindings).toBe(false);
+  });
 });
