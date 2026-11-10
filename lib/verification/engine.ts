@@ -187,7 +187,7 @@ export async function verifyFileAgainstManifest(
 
   // 4. Compute Whole-File SHA-256
   const computedSha256 = await sha256Bytes(fileBytes);
-  const expectedSha256 = manifest.sha256.toLowerCase();
+  const expectedSha256 = strip0x(manifest.sha256);
   const isHashMatch = computedSha256 === expectedSha256;
 
   // Declared size vs actual size (a size difference alone proves the bytes differ)

@@ -1,21 +1,26 @@
 import { ed25519 } from "@noble/curves/ed25519";
 
 /**
- * Normalizes hex string (removes optional 0x prefix, ensures even length).
+ * Normalizes a hex string: trims, lowercases and removes an optional 0x prefix.
+ * Does not pad or repair malformed input; use `hexToBytes` to validate.
  */
 export function normalizeHex(hex: string): string {
   let clean = hex.trim().toLowerCase();
   if (clean.startsWith("0x")) {
     clean = clean.slice(2);
   }
-  if (clean.length % 2 !== 0) {
-    clean = "0" + clean;
-  }
   return clean;
 }
 
+/**
+ * Decodes hex to bytes. Throws on odd length or non-hex characters instead of
+ * silently producing zero bytes.
+ */
 export function hexToBytes(hex: string): Uint8Array {
   const clean = normalizeHex(hex);
+  if (clean.length % 2 !== 0 || !/^[0-9a-f]*$/.test(clean)) {
+    throw new TypeError("Invalid hex string");
+  }
   const bytes = new Uint8Array(clean.length / 2);
   for (let i = 0; i < clean.length; i += 2) {
     bytes[i / 2] = parseInt(clean.slice(i, i + 2), 16);

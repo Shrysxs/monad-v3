@@ -5,6 +5,7 @@ import {
   generateEd25519KeyPair,
   signEd25519Message,
   verifyEd25519Signature,
+  hexToBytes,
 } from "@/lib/crypto/ed25519";
 import {
   parseAndValidateManifest,
@@ -203,5 +204,48 @@ describe("Release Manifest Pipeline & Verification Vectors", () => {
     if (!validation.valid) {
       expect(validation.error).toBe("INVALID_DIGEST_FORMAT");
     }
+  });
+
+  it("verifies a manifest whose sha256 was signed with uppercase hex and a 0x prefix", async () => {
+    const payload = { ...validPayload, sha256: "0x" + validPayload.sha256.toUpperCase() };
+    const signature = signEd25519Message(canonicalizeRfc8785(payload), keyPair.privateKeyHex);
+
+    const validation = await parseAndValidateManifest(JSON.stringify({ ...payload, signature }));
+    expect(validation.valid).toBe(true);
+    if (validation.valid) {
+      const sig = await verifyManifestSignature(validation.manifest, keyPair.publicKeyHex);
+      expect(sig.isValid).toBe(true);
+    }
+  });
+
+  it("verifies a manifest that carries extra signed fields", async () => {
+    const payload = { ...validPayload, buildId: "ci-4821" };
+    const signature = signEd25519Message(canonicalizeRfc8785(payload), keyPair.privateKeyHex);
+
+    const validation = await parseAndValidateManifest(JSON.stringify({ ...payload, signature }));
+    expect(validation.valid).toBe(true);
+    if (validation.valid) {
+      expect((await verifyManifestSignature(validation.manifest, keyPair.publicKeyHex)).isValid).toBe(true);
+    }
+  });
+
+  it("rejects a non-integer chunkSize", async () => {
+    const result = await parseAndValidateManifest(
+      JSON.stringify({ ...validPayload, chunkSize: 1.5, signature: "aa".repeat(64) })
+    );
+    expect(result.valid).toBe(false);
+  });
+
+  it("rejects non-string chunk hashes without throwing", async () => {
+    const result = await parseAndValidateManifest(
+      JSON.stringify({ ...validPayload, chunkHashes: [42], signature: "aa".repeat(64) })
+    );
+    expect(result.valid).toBe(false);
+  });
+
+  it("refuses to decode malformed hex instead of producing zero bytes", () => {
+    expect(() => hexToBytes("zz")).toThrow();
+    expect(() => hexToBytes("abc")).toThrow();
+    expect(Array.from(hexToBytes("0x0aff"))).toEqual([10, 255]);
   });
 });

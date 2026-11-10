@@ -69,7 +69,11 @@ export async function parseAndValidateManifest(
   }
 
   // File size validation
-  if (typeof parsed.fileSize !== "number" || !Number.isInteger(parsed.fileSize) || parsed.fileSize < 0) {
+  if (
+    typeof parsed.fileSize !== "number" ||
+    !Number.isSafeInteger(parsed.fileSize) ||
+    parsed.fileSize < 0
+  ) {
     return {
       valid: false,
       error: "SCHEMA_VALIDATION_FAILED",
@@ -99,7 +103,11 @@ export async function parseAndValidateManifest(
 
   // Optional chunk validation
   if (parsed.chunkSize !== undefined) {
-    if (typeof parsed.chunkSize !== "number" || parsed.chunkSize <= 0) {
+    if (
+      typeof parsed.chunkSize !== "number" ||
+      !Number.isSafeInteger(parsed.chunkSize) ||
+      parsed.chunkSize <= 0
+    ) {
       return {
         valid: false,
         error: "SCHEMA_VALIDATION_FAILED",
@@ -117,7 +125,8 @@ export async function parseAndValidateManifest(
       };
     }
     for (let i = 0; i < parsed.chunkHashes.length; i++) {
-      const h = normalizeHex(parsed.chunkHashes[i]);
+      const raw = parsed.chunkHashes[i];
+      const h = typeof raw === "string" ? normalizeHex(raw) : "";
       if (!/^[0-9a-f]{64}$/.test(h)) {
         return {
           valid: false,
@@ -128,26 +137,15 @@ export async function parseAndValidateManifest(
     }
   }
 
-  // Extract signed envelope vs detached payload
-  const { signature, ...payloadRest } = parsed;
+  // Extract signed envelope vs detached payload.
+  // The payload is kept EXACTLY as the publisher signed it (field formatting and any extra
+  // fields included): rewriting it, e.g. lowercasing sha256 or dropping unknown fields,
+  // would change the canonical bytes and break valid signatures. Consumers normalize hex
+  // when comparing values.
+  const { signature: _signature, ...payloadRest } = parsed;
+  void _signature;
 
-  const payload: ReleaseManifestPayload = {
-    schemaVersion: "1.0.0",
-    publisherId: payloadRest.publisherId as string,
-    productId: payloadRest.productId as string,
-    releaseVersion: payloadRest.releaseVersion as string,
-    fileName: payloadRest.fileName as string,
-    fileSize: payloadRest.fileSize as number,
-    sha256: sha256Hex,
-    publisherKeyId: payloadRest.publisherKeyId as string,
-    ...(payloadRest.chunkSize !== undefined ? { chunkSize: payloadRest.chunkSize as number } : {}),
-    ...(payloadRest.chunkHashes !== undefined ? { chunkHashes: payloadRest.chunkHashes as string[] } : {}),
-    ...(payloadRest.merkleRoot !== undefined ? { merkleRoot: payloadRest.merkleRoot as string } : {}),
-    ...(payloadRest.releaseNotesUrl !== undefined ? { releaseNotesUrl: payloadRest.releaseNotesUrl as string } : {}),
-    ...(payloadRest.previousReleaseDigest !== undefined
-      ? { previousReleaseDigest: payloadRest.previousReleaseDigest as `0x${string}` }
-      : {}),
-  };
+  const payload = payloadRest as unknown as ReleaseManifestPayload;
 
   const manifest: SignedReleaseManifest = {
     ...payload,
