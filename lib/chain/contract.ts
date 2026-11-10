@@ -153,6 +153,12 @@ export async function checkPublisherAuthorization(
   return Boolean(await readRegistry().isAuthorizedPublisher([publisherAddress]));
 }
 
+/** Reads the registry admin (Ownable owner), who can authorize and deauthorize publishers. */
+export async function fetchRegistryOwner(): Promise<`0x${string}` | null> {
+  if (!isRegistryConfigured()) return null;
+  return (await readRegistry().owner()) as `0x${string}`;
+}
+
 /** @deprecated Use RegistryPublisher from lib/verification/types. */
 export type OnChainPublisherInfo = RegistryPublisher;
 

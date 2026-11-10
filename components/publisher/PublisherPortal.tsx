@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import {
   KeyRound,
+  UserCog,
   ShieldCheck,
   PlusCircle,
   AlertOctagon,
@@ -23,38 +24,69 @@ import { monadTestnet, monadPublicClient } from "@/lib/chain/monad";
 import {
   calculateReleaseDigest,
   getRegistryAddress,
-  checkPublisherAuthorization,
+  fetchPublisherByAddress,
+  fetchRegistryOwner,
   fetchOnChainRelease,
   fetchOnChainReleaseByFileHash,
   SWARMTRACE_REGISTRY_ABI,
 } from "@/lib/chain/contract";
 import { sha256Bytes } from "@/lib/crypto/hashing";
-import { createSignedManifest, computeManifestDigest } from "@/lib/manifests/manifest";
-import type { ReleaseRecord, ReleaseManifestPayload } from "@/lib/verification/types";
+import {
+  createSignedManifest,
+  computeManifestDigest,
+  parseAndValidateManifest,
+  verifyManifestSignature,
+} from "@/lib/manifests/manifest";
+import type {
+  ReleaseRecord,
+  ReleaseManifestPayload,
+  RegistryPublisher,
+  SignedReleaseManifest,
+} from "@/lib/verification/types";
+
+const MONAD_CHAIN_ID = 10143;
+const ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function getEthereum(): any | null {
+  return typeof window !== "undefined" ? (window as any).ethereum ?? null : null;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+const with0x = (hex: string) => (hex.startsWith("0x") ? hex : `0x${hex}`) as `0x${string}`;
+
+interface RegistrationCheck {
+  manifest: SignedReleaseManifest;
+  manifestDigest: `0x${string}`;
+  /** Digest the contract will compute, using the publisherId stored on-chain for this wallet */
+  releaseDigest: `0x${string}`;
+  problems: string[];
+}
 
 export function PublisherPortal() {
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [chainId, setChainId] = useState<number | null>(null);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(false);
+  const [onChainPublisher, setOnChainPublisher] = useState<RegistryPublisher | null>(null);
+  const [registryOwner, setRegistryOwner] = useState<`0x${string}` | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   // Tabs: manifest, register, revoke, lookup
-  const [activeTab, setActiveTab] = useState<"manifest" | "register" | "revoke" | "lookup">("register");
+  const [activeTab, setActiveTab] = useState<"manifest" | "register" | "revoke" | "lookup" | "admin">(
+    "register"
+  );
 
-  // Registration form
-  const [regPublisherId, setRegPublisherId] = useState<string>("org.penguintrace.core");
-  const [regProductId, setRegProductId] = useState<string>("penguin-daemon");
-  const [regVersion, setRegVersion] = useState<string>("1.0.0");
-  const [regFileHash, setRegFileHash] = useState<string>(
-    "0x4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a"
-  );
-  const [regManifestDigest, setRegManifestDigest] = useState<string>(
-    "0x8fae8f81a70295da9be68d90faea2050b44cb72e73708bb04cf93f415c138d61"
-  );
-  const [regPreviousReleaseDigest, setRegPreviousReleaseDigest] = useState<string>(
-    "0x0000000000000000000000000000000000000000000000000000000000000000"
-  );
+  // Registration form: the signed manifest is the single source of truth
+  const [regManifestJson, setRegManifestJson] = useState<string>("");
+  const [regPreviousReleaseDigest, setRegPreviousReleaseDigest] = useState<string>(ZERO_BYTES32);
+  const [regCheck, setRegCheck] = useState<RegistrationCheck | null>(null);
+  const [regParseError, setRegParseError] = useState<string | null>(null);
+
+  // Admin form
+  const [adminPublisherAddress, setAdminPublisherAddress] = useState<string>("");
+  const [adminPublisherId, setAdminPublisherId] = useState<string>("");
+  const [adminPublisherKey, setAdminPublisherKey] = useState<string>("");
 
   // Revocation form
   const [revokeDigest, setRevokeDigest] = useState<string>("");
@@ -97,6 +129,8 @@ export function PublisherPortal() {
   const contractAddress = getRegistryAddress();
   const isContractConfigured =
     contractAddress !== "0x0000000000000000000000000000000000000000";
+  const isRegistryAdmin =
+    !!walletAddress && !!registryOwner && walletAddress.toLowerCase() === registryOwner.toLowerCase();
 
   function copyText(key: string, text: string) {
     navigator.clipboard.writeText(text);
@@ -104,53 +138,72 @@ export function PublisherPortal() {
     setTimeout(() => setCopiedKey(null), 2000);
   }
 
-  // Check wallet connection on mount
+  // Sync wallet account / chain on mount and whenever the wallet reports a change
   useEffect(() => {
-    async function checkWallet() {
-      if (typeof window !== "undefined" && (window as any).ethereum) {
-        try {
-          const ethereum = (window as any).ethereum;
-          const accounts = await ethereum.request({ method: "eth_accounts" });
-          if (accounts && accounts.length > 0) {
-            setWalletAddress(accounts[0]);
-          }
-          const currentChainId = await ethereum.request({ method: "eth_chainId" });
-          setChainId(parseInt(currentChainId, 16));
-        } catch {
-          // Silent fallback
-        }
+    const ethereum = getEthereum();
+    if (!ethereum) return;
+
+    const syncChain = async () => {
+      try {
+        setChainId(parseInt(await ethereum.request({ method: "eth_chainId" }), 16));
+      } catch {
+        // ignore
       }
-    }
-    checkWallet();
+    };
+    ethereum
+      .request({ method: "eth_accounts" })
+      .then((accounts: string[]) => setWalletAddress(accounts?.[0] ?? null))
+      .catch(() => {});
+    syncChain();
+
+    const onAccounts = (accounts: string[]) => setWalletAddress(accounts?.[0] ?? null);
+    const onChain = (id: string) => setChainId(parseInt(id, 16));
+    ethereum.on?.("accountsChanged", onAccounts);
+    ethereum.on?.("chainChanged", onChain);
+    return () => {
+      ethereum.removeListener?.("accountsChanged", onAccounts);
+      ethereum.removeListener?.("chainChanged", onChain);
+    };
   }, []);
 
-  // Check publisher authorization if wallet & contract configured
+  // Registry admin (owner) for the Admin tab
+  useEffect(() => {
+    if (!isContractConfigured) return;
+    fetchRegistryOwner()
+      .then(setRegistryOwner)
+      .catch(() => setRegistryOwner(null));
+  }, [isContractConfigured]);
+
+  // Load this wallet's on-chain publisher entry (publisherId + authorized Ed25519 key)
   useEffect(() => {
     async function checkAuth() {
       if (walletAddress && isContractConfigured) {
         setIsCheckingAuth(true);
         try {
-          const authorized = await checkPublisherAuthorization(walletAddress as `0x${string}`);
-          setIsAuthorized(authorized);
+          const info = await fetchPublisherByAddress(walletAddress as `0x${string}`);
+          setOnChainPublisher(info);
+          setIsAuthorized(info?.isAuthorized ?? false);
         } catch {
-          setIsAuthorized(false);
+          setOnChainPublisher(null);
+          setIsAuthorized(null);
         } finally {
           setIsCheckingAuth(false);
         }
       } else {
+        setOnChainPublisher(null);
         setIsAuthorized(null);
       }
     }
     checkAuth();
-  }, [walletAddress, isContractConfigured]);
+  }, [walletAddress, isContractConfigured, confirmedBlock]);
 
   async function connectWallet() {
-    if (typeof window === "undefined" || !(window as any).ethereum) {
+    if (!getEthereum()) {
       setErrorMessage("No Web3 wallet extension detected in this browser.");
       return;
     }
     try {
-      const ethereum = (window as any).ethereum;
+      const ethereum = getEthereum();
       const accounts = await ethereum.request({ method: "eth_requestAccounts" });
       if (accounts && accounts.length > 0) {
         setWalletAddress(accounts[0]);
@@ -168,17 +221,18 @@ export function PublisherPortal() {
     }
   }
 
-  async function switchToMonadTestnet() {
-    if (typeof window === "undefined" || !(window as any).ethereum) return;
-    const ethereum = (window as any).ethereum;
+  /**
+   * Switches the wallet to Monad Testnet. Returns true only if the wallet is
+   * confirmed to be on chain 10143 afterwards; callers must abort otherwise.
+   */
+  async function switchToMonadTestnet(): Promise<boolean> {
+    const ethereum = getEthereum();
+    if (!ethereum) return false;
     try {
       await ethereum.request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: "0x279f" }], // 10143
       });
-      setChainId(10143);
-      setStatusMessage("Switched to Monad Testnet (Chain ID 10143).");
-      setErrorMessage(null);
     } catch (switchError: any) {
       if (switchError.code === 4902) {
         try {
@@ -194,15 +248,96 @@ export function PublisherPortal() {
               },
             ],
           });
-          setChainId(10143);
         } catch (addError: any) {
           setErrorMessage("Failed to add Monad Testnet: " + addError.message);
+          return false;
         }
       } else if (switchError.code === 4001) {
         setErrorMessage("Network switch rejected by user.");
+        return false;
       } else {
         setErrorMessage("Network switch error: " + switchError.message);
+        return false;
       }
+    }
+
+    // Confirm with the wallet rather than assuming the switch succeeded.
+    const current = parseInt(await ethereum.request({ method: "eth_chainId" }), 16);
+    setChainId(current);
+    if (current !== MONAD_CHAIN_ID) {
+      setErrorMessage("Wallet is still not on Monad Testnet (chain 10143). Transaction not sent.");
+      return false;
+    }
+    setStatusMessage("Switched to Monad Testnet (Chain ID 10143).");
+    setErrorMessage(null);
+    return true;
+  }
+
+  /**
+   * Sends one registry transaction and tracks it through confirmation.
+   * Aborts (without sending) if the wallet, network, or contract is not ready.
+   */
+  async function submitRegistryTx(
+    functionName: string,
+    args: readonly unknown[],
+    messages: { submitted: string; confirmed: (block: bigint) => string; failedPrefix: string }
+  ): Promise<boolean> {
+    setIsSubmitting(true);
+    setStatusMessage(null);
+    setErrorMessage(null);
+    setConfirmedTxHash(null);
+
+    try {
+      if (!isContractConfigured) {
+        setErrorMessage("Registry contract address is not configured.");
+        return false;
+      }
+      const ethereum = getEthereum();
+      if (!walletAddress || !ethereum) {
+        setErrorMessage("Please connect a Web3 wallet to broadcast on Monad Testnet.");
+        return false;
+      }
+      if (chainId !== MONAD_CHAIN_ID && !(await switchToMonadTestnet())) {
+        setTxPhase("error");
+        return false;
+      }
+
+      setTxPhase("awaiting_wallet");
+      setStatusMessage("Awaiting transaction approval in wallet...");
+
+      const client = createWalletClient({ chain: monadTestnet, transport: custom(ethereum) });
+      const hash = await client.writeContract({
+        address: contractAddress,
+        abi: SWARMTRACE_REGISTRY_ABI,
+        functionName,
+        args,
+        account: walletAddress as `0x${string}`,
+      } as any);
+
+      setConfirmedTxHash(hash);
+      setTxPhase("confirming");
+      setStatusMessage(`${messages.submitted}: ${hash}. Awaiting confirmation on Monad Testnet...`);
+
+      const receipt = await monadPublicClient.waitForTransactionReceipt({ hash });
+      if (receipt.status === "success") {
+        setTxPhase("confirmed");
+        setConfirmedBlock(receipt.blockNumber);
+        setStatusMessage(messages.confirmed(receipt.blockNumber));
+        return true;
+      }
+      setTxPhase("reverted");
+      setErrorMessage(`Transaction reverted on-chain in block #${receipt.blockNumber}.`);
+      return false;
+    } catch (err: any) {
+      setTxPhase("error");
+      if (err.code === 4001 || err.message?.includes("User rejected")) {
+        setErrorMessage("Transaction was cancelled in the wallet.");
+      } else {
+        setErrorMessage(`${messages.failedPrefix}: ${err.shortMessage || err.message}`);
+      }
+      return false;
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -265,190 +400,146 @@ export function PublisherPortal() {
   }
 
   function handleTransferToRegistration() {
-    setRegPublisherId(manifestGenPublisherId);
-    setRegProductId(manifestGenProductId);
-    setRegVersion(manifestGenVersion);
-    setRegFileHash(
-      (manifestGenSha256.startsWith("0x") ? manifestGenSha256 : `0x${manifestGenSha256}`) as `0x${string}`
-    );
-    if (manifestGenDigest) {
-      setRegManifestDigest(manifestGenDigest);
-    }
+    setRegManifestJson(manifestGenSignedJson);
     setActiveTab("register");
-    setStatusMessage("Manifest data transferred to registration form. Ready to commit on Monad Testnet.");
+    setStatusMessage("Signed manifest transferred to the registration form.");
   }
 
-  const computedPreviewDigest = calculateReleaseDigest(
-    regPublisherId,
-    regProductId,
-    regVersion,
-    (regFileHash.startsWith("0x") ? regFileHash : `0x${regFileHash}`) as `0x${string}`,
-    (regManifestDigest.startsWith("0x") ? regManifestDigest : `0x${regManifestDigest}`) as `0x${string}`
-  );
+  // Re-validate the registration manifest whenever it, or the wallet's on-chain entry, changes.
+  useEffect(() => {
+    let cancelled = false;
+    async function check() {
+      if (!regManifestJson.trim()) {
+        setRegCheck(null);
+        setRegParseError(null);
+        return;
+      }
+      const parsed = await parseAndValidateManifest(regManifestJson);
+      if (cancelled) return;
+      if (!parsed.valid) {
+        setRegCheck(null);
+        setRegParseError(parsed.message);
+        return;
+      }
+      setRegParseError(null);
+
+      const manifest = parsed.manifest;
+      const manifestDigest = with0x(parsed.manifestDigest);
+      const problems: string[] = [];
+
+      if (!onChainPublisher) {
+        problems.push("Connected wallet is not a registered publisher, so the signing key cannot be checked.");
+      } else {
+        if (!onChainPublisher.isAuthorized) problems.push("Connected publisher account is deauthorized.");
+        if (manifest.publisherId !== onChainPublisher.publisherId) {
+          problems.push(
+            `Manifest publisherId "${manifest.publisherId}" does not match this wallet's on-chain publisherId "${onChainPublisher.publisherId}".`
+          );
+        }
+        const sig = await verifyManifestSignature(manifest, onChainPublisher.ed25519PubKey.replace(/^0x/, ""));
+        if (cancelled) return;
+        if (!sig.isValid) {
+          problems.push(
+            "Manifest signature does not verify against this publisher's registered Ed25519 key. Registering it would create a release no verifier can authenticate."
+          );
+        }
+      }
+
+      // The contract derives the digest from the publisherId stored on-chain, not from user input.
+      const releaseDigest = calculateReleaseDigest(
+        onChainPublisher?.publisherId ?? manifest.publisherId,
+        manifest.productId,
+        manifest.releaseVersion,
+        with0x(manifest.sha256),
+        manifestDigest
+      );
+      setRegCheck({ manifest, manifestDigest, releaseDigest, problems });
+    }
+    check();
+    return () => {
+      cancelled = true;
+    };
+  }, [regManifestJson, onChainPublisher]);
 
   async function handleRegisterRelease(e: React.FormEvent) {
     e.preventDefault();
-    setIsSubmitting(true);
-    setStatusMessage(null);
-    setErrorMessage(null);
-    setConfirmedTxHash(null);
-    setConfirmedBlock(null);
-
-    try {
-      if (!isContractConfigured) {
-        setErrorMessage("Registry contract address is not configured.");
-        setIsSubmitting(false);
-        return;
-      }
-
-      if (!walletAddress || typeof window === "undefined" || !(window as any).ethereum) {
-        setErrorMessage("Please connect a Web3 wallet to broadcast on Monad Testnet.");
-        setIsSubmitting(false);
-        return;
-      }
-
-      if (chainId !== 10143) {
-        await switchToMonadTestnet();
-      }
-
-      if (isAuthorized === false) {
-        setErrorMessage(
-          `Unauthorized caller: Address ${walletAddress} is not registered as an authorized publisher in SwarmTraceRegistry. Transaction would revert with NotAuthorizedPublisher.`
-        );
-        setIsSubmitting(false);
-        return;
-      }
-
-      setTxPhase("awaiting_wallet");
-      setStatusMessage("Awaiting transaction approval in wallet...");
-
-      const client = createWalletClient({
-        chain: monadTestnet,
-        transport: custom((window as any).ethereum),
-      });
-
-      const normFileHash = (regFileHash.startsWith("0x") ? regFileHash : `0x${regFileHash}`) as `0x${string}`;
-      const normManifestDigest = (regManifestDigest.startsWith("0x") ? regManifestDigest : `0x${regManifestDigest}`) as `0x${string}`;
-      const normPrevDigest = (regPreviousReleaseDigest.startsWith("0x")
-        ? regPreviousReleaseDigest
-        : `0x${regPreviousReleaseDigest}`) as `0x${string}`;
-
-      const hash = await client.writeContract({
-        address: contractAddress,
-        abi: SWARMTRACE_REGISTRY_ABI,
-        functionName: "registerRelease",
-        args: [
-          regProductId,
-          regVersion,
-          normFileHash,
-          normManifestDigest,
-          normPrevDigest,
-        ],
-        account: walletAddress as `0x${string}`,
-      });
-
-      setConfirmedTxHash(hash);
-      setTxPhase("confirming");
-      setStatusMessage(`Transaction submitted: ${hash}. Awaiting block confirmation on Monad Testnet...`);
-
-      const receipt = await monadPublicClient.waitForTransactionReceipt({ hash });
-
-      if (receipt.status === "success") {
-        setTxPhase("confirmed");
-        setConfirmedBlock(receipt.blockNumber);
-        setStatusMessage(
-          `Release registered on Monad Testnet in block #${receipt.blockNumber}.`
-        );
-      } else {
-        setTxPhase("reverted");
-        setErrorMessage(
-          `Transaction reverted on-chain in block #${receipt.blockNumber}.`
-        );
-      }
-    } catch (err: any) {
-      setTxPhase("error");
-      if (err.code === 4001 || err.message?.includes("User rejected")) {
-        setErrorMessage("Transaction was cancelled by user in wallet.");
-      } else {
-        setErrorMessage("Registration failed: " + (err.shortMessage || err.message));
-      }
-    } finally {
-      setIsSubmitting(false);
+    if (!regCheck) {
+      setErrorMessage(regParseError ?? "Paste the signed release manifest to register.");
+      return;
     }
+    if (regCheck.problems.length > 0) {
+      setErrorMessage(`Registration blocked: ${regCheck.problems[0]}`);
+      return;
+    }
+    const prev = with0x(regPreviousReleaseDigest.trim() || ZERO_BYTES32);
+    if (!/^0x[0-9a-fA-F]{64}$/.test(prev)) {
+      setErrorMessage("Previous release digest must be a 32-byte hex value.");
+      return;
+    }
+
+    const { manifest, manifestDigest } = regCheck;
+    await submitRegistryTx(
+      "registerRelease",
+      [manifest.productId, manifest.releaseVersion, with0x(manifest.sha256), manifestDigest, prev],
+      {
+        submitted: "Transaction submitted",
+        confirmed: (block) => `Release registered on Monad Testnet in block #${block}.`,
+        failedPrefix: "Registration failed",
+      }
+    );
   }
 
   async function handleRevokeRelease(e: React.FormEvent) {
     e.preventDefault();
-    if (!revokeDigest.trim()) {
-      setErrorMessage("Please enter the release digest to revoke.");
+    if (!/^(0x)?[0-9a-fA-F]{64}$/.test(revokeDigest.trim())) {
+      setErrorMessage("Please enter the 32-byte release digest to revoke.");
       return;
     }
+    await submitRegistryTx("revokeRelease", [with0x(revokeDigest.trim()), revokeReason], {
+      submitted: "Revocation submitted",
+      confirmed: (block) => `Release revoked on Monad Testnet in block #${block}.`,
+      failedPrefix: "Revocation failed",
+    });
+  }
 
-    setIsSubmitting(true);
-    setStatusMessage(null);
-    setErrorMessage(null);
-    setConfirmedTxHash(null);
-    setConfirmedBlock(null);
-
-    try {
-      if (!isContractConfigured) {
-        setErrorMessage("Registry contract address is not configured.");
-        setIsSubmitting(false);
-        return;
-      }
-
-      if (!walletAddress || typeof window === "undefined" || !(window as any).ethereum) {
-        setErrorMessage("Please connect a Web3 wallet to broadcast on Monad Testnet.");
-        setIsSubmitting(false);
-        return;
-      }
-
-      if (chainId !== 10143) {
-        await switchToMonadTestnet();
-      }
-
-      setTxPhase("awaiting_wallet");
-      setStatusMessage("Awaiting transaction approval in wallet...");
-
-      const client = createWalletClient({
-        chain: monadTestnet,
-        transport: custom((window as any).ethereum),
-      });
-
-      const normRevokeDigest = (revokeDigest.startsWith("0x") ? revokeDigest : `0x${revokeDigest}`) as `0x${string}`;
-
-      const hash = await client.writeContract({
-        address: contractAddress,
-        abi: SWARMTRACE_REGISTRY_ABI,
-        functionName: "revokeRelease",
-        args: [normRevokeDigest, revokeReason],
-        account: walletAddress as `0x${string}`,
-      });
-
-      setConfirmedTxHash(hash);
-      setTxPhase("confirming");
-      setStatusMessage(`Revocation submitted: ${hash}. Awaiting confirmation on Monad Testnet...`);
-
-      const receipt = await monadPublicClient.waitForTransactionReceipt({ hash });
-
-      if (receipt.status === "success") {
-        setTxPhase("confirmed");
-        setConfirmedBlock(receipt.blockNumber);
-        setStatusMessage(`Release revoked on Monad Testnet in block #${receipt.blockNumber}.`);
-      } else {
-        setTxPhase("reverted");
-        setErrorMessage(`Revocation transaction reverted on-chain.`);
-      }
-    } catch (err: any) {
-      setTxPhase("error");
-      if (err.code === 4001 || err.message?.includes("User rejected")) {
-        setErrorMessage("Revocation transaction was cancelled by user in wallet.");
-      } else {
-        setErrorMessage("Revocation failed: " + (err.shortMessage || err.message));
-      }
-    } finally {
-      setIsSubmitting(false);
+  async function handleAuthorizePublisher(e: React.FormEvent) {
+    e.preventDefault();
+    const address = adminPublisherAddress.trim();
+    const key = adminPublisherKey.trim().replace(/^0x/, "").toLowerCase();
+    if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
+      setErrorMessage("Publisher address must be a 20-byte 0x address.");
+      return;
     }
+    if (!adminPublisherId.trim()) {
+      setErrorMessage("Publisher ID is required (e.g. org.example.app).");
+      return;
+    }
+    if (!/^[0-9a-f]{64}$/.test(key)) {
+      setErrorMessage("Ed25519 public key must be 64 hex characters (32 bytes).");
+      return;
+    }
+    await submitRegistryTx(
+      "authorizePublisher",
+      [address as `0x${string}`, adminPublisherId.trim(), `0x${key}`],
+      {
+        submitted: "Authorization submitted",
+        confirmed: (block) => `Publisher ${adminPublisherId.trim()} authorized in block #${block}.`,
+        failedPrefix: "Authorization failed",
+      }
+    );
+  }
+
+  async function handleDeauthorizePublisher() {
+    const address = adminPublisherAddress.trim();
+    if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
+      setErrorMessage("Enter the publisher address to deauthorize.");
+      return;
+    }
+    await submitRegistryTx("deauthorizePublisher", [address as `0x${string}`], {
+      submitted: "Deauthorization submitted",
+      confirmed: (block) => `Publisher ${address} deauthorized in block #${block}.`,
+      failedPrefix: "Deauthorization failed",
+    });
   }
 
   async function handleLookupRelease(e: React.FormEvent) {
@@ -638,14 +729,20 @@ export function PublisherPortal() {
               <span>Wallet Not Authorized on Registry</span>
             </div>
             <p className="text-amber-900 leading-relaxed">
-              Connected address (<code className="font-mono bg-amber-100/60 px-1 py-0.5 rounded">{walletAddress}</code>) is not on the authorized publishers list in SwarmTraceRegistry. Calling <code className="font-mono">registerRelease</code> will revert on-chain. Contact the contract owner (<code className="font-mono">0xB9BA42...</code>) to call <code className="font-mono">authorizePublisher</code>.
+              Connected address (<code className="font-mono bg-amber-100/60 px-1 py-0.5 rounded">{walletAddress}</code>) is not on the authorized publishers list in SwarmTraceRegistry. Calling <code className="font-mono">registerRelease</code> will revert on-chain. Ask the registry admin
+              {registryOwner ? (
+                <>
+                  {" "}(<code className="font-mono">{registryOwner.slice(0, 10)}...</code>)
+                </>
+              ) : null}{" "}
+              to call <code className="font-mono">authorizePublisher</code> from the Admin tab.
             </p>
           </div>
         )}
       </div>
 
       {/* Action Tabs */}
-      <div className="flex space-x-2 border-b border-neutral-200">
+      <div className="flex space-x-2 border-b border-neutral-200 overflow-x-auto whitespace-nowrap">
         <button
           type="button"
           onClick={() => {
@@ -712,6 +809,23 @@ export function PublisherPortal() {
         >
           <Search className="w-3.5 h-3.5" />
           <span>Registry Lookup</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab("admin");
+            setStatusMessage(null);
+            setErrorMessage(null);
+          }}
+          className={`px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all flex items-center space-x-1.5 ${
+            activeTab === "admin"
+              ? "bg-neutral-950 text-white shadow-sm"
+              : "text-neutral-600 hover:text-neutral-950 hover:bg-neutral-100"
+          }`}
+        >
+          <UserCog className="w-3.5 h-3.5" />
+          <span>Admin</span>
         </button>
       </div>
 
@@ -859,55 +973,20 @@ export function PublisherPortal() {
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-3 gap-3 text-xs">
-            <div>
-              <label className="text-neutral-700 font-medium block mb-1">Publisher ID:</label>
-              <input
-                type="text"
-                value={regPublisherId}
-                onChange={(e) => setRegPublisherId(e.target.value)}
-                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
-              />
-            </div>
-            <div>
-              <label className="text-neutral-700 font-medium block mb-1">Product ID:</label>
-              <input
-                type="text"
-                value={regProductId}
-                onChange={(e) => setRegProductId(e.target.value)}
-                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
-              />
-            </div>
-            <div>
-              <label className="text-neutral-700 font-medium block mb-1">Version:</label>
-              <input
-                type="text"
-                value={regVersion}
-                onChange={(e) => setRegVersion(e.target.value)}
-                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
-              />
-            </div>
-          </div>
-
           <div className="space-y-3 text-xs">
             <div>
-              <label className="text-neutral-700 font-medium block mb-1">File SHA-256 Digest (bytes32):</label>
-              <input
-                type="text"
-                value={regFileHash}
-                onChange={(e) => setRegFileHash(e.target.value)}
-                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
+              <label className="text-neutral-700 font-medium block mb-1">Signed release manifest JSON:</label>
+              <textarea
+                rows={6}
+                value={regManifestJson}
+                onChange={(e) => setRegManifestJson(e.target.value)}
+                placeholder="Paste the signed manifest, or sign one in step 1 and transfer it here."
+                className="w-full rounded-md bg-white border border-neutral-200 p-2.5 font-mono text-[11px] text-neutral-900 focus:outline-none focus:border-neutral-950 resize-none"
               />
-            </div>
-
-            <div>
-              <label className="text-neutral-700 font-medium block mb-1">Manifest Digest (bytes32):</label>
-              <input
-                type="text"
-                value={regManifestDigest}
-                onChange={(e) => setRegManifestDigest(e.target.value)}
-                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
-              />
+              <p className="text-[11px] text-neutral-500 mt-1">
+                The product, version, file hash and manifest digest are taken from this manifest. Its signature is checked
+                against your on-chain Ed25519 key before anything is sent.
+              </p>
             </div>
 
             <div>
@@ -921,19 +1000,61 @@ export function PublisherPortal() {
             </div>
           </div>
 
+          {regParseError && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-300 text-red-950 text-xs">{regParseError}</div>
+          )}
+
+          {regCheck && (
+            <div className="rounded-lg border border-neutral-200 text-xs divide-y divide-neutral-100">
+              {[
+                ["Publisher ID (on-chain)", onChainPublisher?.publisherId ?? "— wallet not registered —"],
+                ["Product", regCheck.manifest.productId],
+                ["Version", regCheck.manifest.releaseVersion],
+                ["File SHA-256", with0x(regCheck.manifest.sha256)],
+                ["Manifest digest", regCheck.manifestDigest],
+              ].map(([label, value]) => (
+                <div key={label} className="flex justify-between gap-3 px-3 py-2">
+                  <span className="text-neutral-500 shrink-0">{label}</span>
+                  <span className="font-mono text-neutral-950 truncate">{value}</span>
+                </div>
+              ))}
+              <div className="px-3 py-2">
+                {regCheck.problems.length === 0 ? (
+                  <span className="inline-flex items-center space-x-1.5 text-emerald-800 font-semibold">
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Signature verified against your registered Ed25519 key</span>
+                  </span>
+                ) : (
+                  <ul className="space-y-1 text-red-800">
+                    {regCheck.problems.map((p) => (
+                      <li key={p} className="flex items-start space-x-1.5">
+                        <X className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                        <span>{p}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* High-Contrast Computed Preview Digest Box */}
           <div className="p-4 rounded-xl bg-neutral-950 text-white border border-neutral-800 space-y-1.5 text-xs shadow-sm">
             <div className="text-neutral-400 flex items-center justify-between font-mono text-[11px]">
               <span>Deterministic Release Digest (keccak256):</span>
-              <span className="text-neutral-400">Monad State Key</span>
+              <span className="text-neutral-400">
+                {onChainPublisher ? "Uses on-chain publisherId" : "Preview (wallet not registered)"}
+              </span>
             </div>
-            <div className="font-mono text-emerald-400 break-all text-xs font-semibold">{computedPreviewDigest}</div>
+            <div className="font-mono text-emerald-400 break-all text-xs font-semibold">
+              {regCheck?.releaseDigest ?? "—"}
+            </div>
           </div>
 
           <div className="flex items-center justify-between pt-2">
             <button
               type="submit"
-              disabled={isSubmitting || isAuthorized === false}
+              disabled={isSubmitting || !regCheck || regCheck.problems.length > 0}
               className="px-6 py-2.5 rounded-lg bg-neutral-950 text-white hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 font-semibold text-xs transition-all shadow-sm flex items-center space-x-2"
             >
               <span>{isSubmitting ? "Broadcasting..." : "Commit release to Monad"}</span>
@@ -1071,6 +1192,81 @@ export function PublisherPortal() {
               <div className="text-neutral-700">Product: {lookupRecord.productId} v{lookupRecord.releaseVersion}</div>
             </div>
           )}
+        </form>
+      )}
+
+      {/* Tab 5: Registry Admin */}
+      {activeTab === "admin" && (
+        <form onSubmit={handleAuthorizePublisher} className="rounded-xl border border-neutral-200 bg-white p-6 space-y-4 shadow-sm animate-in fade-in duration-200">
+          <div className="space-y-1">
+            <h4 className="text-xs font-mono font-bold text-neutral-950 uppercase tracking-wider">
+              Authorize or Deauthorize Publishers
+            </h4>
+            <p className="text-xs text-neutral-500">
+              Only the registry admin{" "}
+              {registryOwner ? <code className="font-mono">({registryOwner.slice(0, 10)}...)</code> : null} can bind a
+              publisher account to a publisher ID and Ed25519 signing key. A publisher ID cannot be changed once set.
+            </p>
+          </div>
+
+          {!isRegistryAdmin && (
+            <div className="p-3 rounded-lg bg-amber-50 border border-amber-300 text-amber-950 text-xs">
+              {walletAddress
+                ? "The connected wallet is not the registry admin. These transactions would revert."
+                : "Connect the registry admin wallet to use this tab."}
+            </div>
+          )}
+
+          <div className="grid sm:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label className="text-neutral-700 font-medium block mb-1">Publisher account address:</label>
+              <input
+                type="text"
+                placeholder="0x..."
+                value={adminPublisherAddress}
+                onChange={(e) => setAdminPublisherAddress(e.target.value)}
+                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
+              />
+            </div>
+            <div>
+              <label className="text-neutral-700 font-medium block mb-1">Publisher ID:</label>
+              <input
+                type="text"
+                placeholder="org.example.app"
+                value={adminPublisherId}
+                onChange={(e) => setAdminPublisherId(e.target.value)}
+                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
+              />
+            </div>
+          </div>
+          <div className="text-xs">
+            <label className="text-neutral-700 font-medium block mb-1">Ed25519 public key (32-byte hex):</label>
+            <input
+              type="text"
+              placeholder="64 hex characters"
+              value={adminPublisherKey}
+              onChange={(e) => setAdminPublisherKey(e.target.value)}
+              className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-neutral-950 focus:outline-none focus:border-neutral-950"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 pt-2">
+            <button
+              type="submit"
+              disabled={isSubmitting || !isRegistryAdmin}
+              className="px-5 py-2.5 rounded-lg bg-neutral-950 text-white hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 font-semibold text-xs transition-all shadow-sm"
+            >
+              {isSubmitting ? "Broadcasting..." : "Authorize publisher"}
+            </button>
+            <button
+              type="button"
+              onClick={handleDeauthorizePublisher}
+              disabled={isSubmitting || !isRegistryAdmin}
+              className="px-5 py-2.5 rounded-lg bg-white text-red-700 border border-red-300 hover:bg-red-50 disabled:bg-neutral-100 disabled:text-neutral-400 disabled:border-neutral-200 font-semibold text-xs transition-all"
+            >
+              Deauthorize address
+            </button>
+          </div>
         </form>
       )}
 
