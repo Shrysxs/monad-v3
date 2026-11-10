@@ -17,7 +17,7 @@ import {
   Copy,
   CheckCheck,
 } from "lucide-react";
-import { getDemoFixtures, DEMO_PUBLISHER, type DemoFixtureItem } from "@/lib/demo-data/fixtures";
+import { getDemoFixtures, type DemoFixtureItem } from "@/lib/demo-data/fixtures";
 import { verifyFileAgainstManifest } from "@/lib/verification/engine";
 import { compareArtifacts, type ReleaseDnaComparison } from "@/lib/risk/release-dna";
 import { aggregateRiskIntelligence, type RiskIntelligenceReport } from "@/lib/risk/evidence";
@@ -65,16 +65,16 @@ export function DemoWalkthrough() {
             fileBytes: authentic.fileBytes,
             fileName: authentic.fileName,
             manifest: authentic.manifest,
-            publisherPublicKeyHex: DEMO_PUBLISHER.publicKeyHex,
+            publisher: authentic.publisher,
             onChainRecord: authentic.releaseRecord,
-            authorizedPublisherPubKeyHex: DEMO_PUBLISHER.publicKeyHex,
+            trustSource: "DEMO_FIXTURE",
           });
           setStep1Verdict(v1);
 
           const r4 = aggregateRiskIntelligence({
             fileIntegrity: v1.fileIntegrity,
             signatureVerification: v1.signatureVerification,
-            releaseRecord: authentic.releaseRecord,
+            releaseRecord: v1.releaseRecord,
             scannerConfig: { enabled: false },
           });
           setStep4Report(r4);
@@ -85,9 +85,9 @@ export function DemoWalkthrough() {
             fileBytes: tampered.fileBytes,
             fileName: tampered.fileName,
             manifest: tampered.manifest,
-            publisherPublicKeyHex: DEMO_PUBLISHER.publicKeyHex,
+            publisher: tampered.publisher,
             onChainRecord: tampered.releaseRecord,
-            authorizedPublisherPubKeyHex: DEMO_PUBLISHER.publicKeyHex,
+            trustSource: "DEMO_FIXTURE",
           });
           setStep2Verdict(v2);
         }

@@ -17,20 +17,11 @@ import {
   aggregateRiskIntelligence,
   type RiskIntelligenceReport,
 } from "@/lib/risk/evidence";
-import {
-  getDemoFixtures,
-  DEMO_PUBLISHER,
-  DEMO_MONAD_PUBLISHER,
-  type DemoFixtureItem,
-} from "@/lib/demo-data/fixtures";
-import { sha256Bytes } from "@/lib/crypto/hashing";
-import { parseAndValidateManifest, verifyManifestSignature } from "@/lib/manifests/manifest";
-import { fetchOnChainReleaseByFileHash } from "@/lib/chain/contract";
-import type {
-  FileIntegrityResult,
-  SignatureVerificationResult,
-  EvidenceFinding,
-} from "@/lib/verification/types";
+import { getDemoFixtures, type DemoFixtureItem } from "@/lib/demo-data/fixtures";
+import { parseAndValidateManifest } from "@/lib/manifests/manifest";
+import { resolveRegistryTrustAnchors } from "@/lib/chain/contract";
+import { verifyFileAgainstManifest } from "@/lib/verification/engine";
+import type { EvidenceFinding } from "@/lib/verification/types";
 
 export function EvidencePanel() {
   const [mode, setMode] = useState<"demo" | "live">("demo");
@@ -42,7 +33,6 @@ export function EvidencePanel() {
   // Custom artifact evaluation state
   const [customFile, setCustomFile] = useState<File | null>(null);
   const [customManifestText, setCustomManifestText] = useState<string>("");
-  const [customPubKeyHex, setCustomPubKeyHex] = useState<string>("");
   const [isEvaluatingCustom, setIsEvaluatingCustom] = useState<boolean>(false);
   const [customError, setCustomError] = useState<string | null>(null);
 
@@ -50,12 +40,12 @@ export function EvidencePanel() {
     async function load() {
       const items = await getDemoFixtures();
       setFixtures(items);
-      evaluateFixture("fixture-authentic-ubuntu", items, false);
+      await evaluateFixture("fixture-authentic-ubuntu", items, false);
     }
     load();
   }, []);
 
-  function evaluateFixture(
+  async function evaluateFixture(
     fixtureId: string,
     items = fixtures,
     threatSimulated = simulateScannerThreat
@@ -64,35 +54,16 @@ export function EvidencePanel() {
     const fixture = items.find((f) => f.id === fixtureId);
     if (!fixture) return;
 
-    const isTampered = fixture.id.includes("tampered") || fixture.id.includes("repack");
-    const chunksCount = fixture.manifest.chunkHashes?.length ?? 0;
-
-    const fileIntegrity: FileIntegrityResult = {
-      status: isTampered ? "MISMATCH" : "MATCH",
+    // Run the real verification engine against the demo registry, so the report
+    // reflects actual signature / hash / registry results for each fixture.
+    const verdict = await verifyFileAgainstManifest({
+      fileBytes: fixture.fileBytes,
       fileName: fixture.fileName,
-      fileSize: fixture.fileBytes.byteLength,
-      computedSha256: fixture.manifest.sha256,
-      expectedSha256: fixture.manifest.sha256,
-      chunksTotal: chunksCount,
-      chunksMatched: isTampered ? Math.max(0, chunksCount - 1) : chunksCount,
-      message: isTampered
-        ? "Computed hash differs from expected manifest checksum"
-        : "Computed hash matches signed manifest exactly",
-    };
-
-    const signatureVerification: SignatureVerificationResult = {
-      status: "VALID",
-      isValid: true,
-      publisherId: fixture.manifest.publisherId,
-      keyId: fixture.manifest.publisherKeyId,
-      publicKeyUsed:
-        fixture.manifest.publisherId === DEMO_MONAD_PUBLISHER.publisherId
-          ? DEMO_MONAD_PUBLISHER.publicKeyHex
-          : DEMO_PUBLISHER.publicKeyHex,
-      canonicalPayload: "{}",
-      computedManifestDigest: "0x" + fixture.manifest.sha256,
-      message: "Valid Ed25519 signature verified",
-    };
+      manifest: fixture.manifest,
+      publisher: fixture.publisher,
+      onChainRecord: fixture.releaseRecord,
+      trustSource: "DEMO_FIXTURE",
+    });
 
     const externalFindings: EvidenceFinding[] = [];
     if (threatSimulated) {
@@ -111,9 +82,9 @@ export function EvidencePanel() {
     }
 
     const calculatedReport = aggregateRiskIntelligence({
-      fileIntegrity,
-      signatureVerification,
-      releaseRecord: fixture.releaseRecord,
+      fileIntegrity: verdict.fileIntegrity,
+      signatureVerification: verdict.signatureVerification,
+      releaseRecord: verdict.releaseRecord,
       scannerConfig: threatSimulated ? { enabled: true, apiKey: "demo_mock_key" } : undefined,
       externalFindings: threatSimulated ? externalFindings : undefined,
     });
@@ -123,8 +94,8 @@ export function EvidencePanel() {
 
   async function handleEvaluateCustomArtifact(e: React.FormEvent) {
     e.preventDefault();
-    if (!customFile && !customManifestText.trim()) {
-      setCustomError("Please select a target file or supply a manifest JSON.");
+    if (!customFile || !customManifestText.trim()) {
+      setCustomError("Please select the downloaded file and paste its signed release manifest.");
       return;
     }
 
@@ -132,79 +103,28 @@ export function EvidencePanel() {
     setCustomError(null);
 
     try {
-      let fileSha256 = "";
-      let fileName = "Uploaded File";
-      let fileSize = 0;
-
-      if (customFile) {
-        const buffer = await customFile.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-        fileSha256 = await sha256Bytes(bytes);
-        fileName = customFile.name;
-        fileSize = bytes.byteLength;
+      const parsed = await parseAndValidateManifest(customManifestText);
+      if (!parsed.valid) {
+        setCustomError(`Manifest validation error: ${parsed.message}`);
+        return;
       }
 
-      let parsedManifest = undefined;
-      if (customManifestText.trim()) {
-        const parsed = await parseAndValidateManifest(customManifestText);
-        if (parsed.valid) {
-          parsedManifest = parsed.manifest;
-          if (!fileSha256) fileSha256 = parsed.manifest.sha256;
-          if (fileName === "Uploaded File") fileName = parsed.manifest.fileName;
-          if (!fileSize) fileSize = parsed.manifest.fileSize;
-        } else {
-          setCustomError(`Manifest validation error: ${parsed.message}`);
-          setIsEvaluatingCustom(false);
-          return;
-        }
-      }
-
-      const isHashMatch = parsedManifest ? fileSha256 === parsedManifest.sha256.toLowerCase() : true;
-      const fileIntegrity: FileIntegrityResult = {
-        status: isHashMatch ? "MATCH" : "MISMATCH",
-        fileName,
-        fileSize,
-        computedSha256: fileSha256,
-        expectedSha256: parsedManifest?.sha256,
-        message: isHashMatch
-          ? "SHA-256 computed locally via Web Crypto API matches reference."
-          : `SHA-256 digest mismatch.`,
-      };
-
-      let signatureVerification: SignatureVerificationResult;
-      if (parsedManifest && customPubKeyHex.trim()) {
-        signatureVerification = await verifyManifestSignature(
-          parsedManifest,
-          customPubKeyHex.trim()
-        );
-      } else {
-        signatureVerification = {
-          status: "KEY_NOT_FOUND",
-          isValid: false,
-          publisherId: parsedManifest?.publisherId || "unspecified",
-          keyId: parsedManifest?.publisherKeyId || "unspecified",
-          publicKeyUsed: customPubKeyHex.trim() || "none",
-          canonicalPayload: "",
-          computedManifestDigest: "",
-          message: "No publisher Ed25519 public key supplied for signature validation.",
-        };
-      }
-
-      let onChainRecord = null;
-      try {
-        if (fileSha256) {
-          onChainRecord = await fetchOnChainReleaseByFileHash(
-            ("0x" + fileSha256) as `0x${string}`
-          );
-        }
-      } catch {
-        // Fallback
-      }
+      // Publisher key and release record come only from the Monad registry.
+      const anchors = await resolveRegistryTrustAnchors(parsed.manifest, parsed.manifestDigest);
+      const verdict = await verifyFileAgainstManifest({
+        fileBytes: new Uint8Array(await customFile.arrayBuffer()),
+        fileName: customFile.name,
+        manifest: parsed.manifest,
+        publisher: anchors.publisher,
+        onChainRecord: anchors.releaseRecord,
+        networkError: anchors.networkError,
+        trustSource: "MONAD_TESTNET",
+      });
 
       const calculatedReport = aggregateRiskIntelligence({
-        fileIntegrity,
-        signatureVerification,
-        releaseRecord: onChainRecord,
+        fileIntegrity: verdict.fileIntegrity,
+        signatureVerification: verdict.signatureVerification,
+        releaseRecord: verdict.releaseRecord,
       });
 
       setReport(calculatedReport);
@@ -223,7 +143,7 @@ export function EvidencePanel() {
           type="button"
           onClick={() => {
             setMode("demo");
-            evaluateFixture("fixture-authentic-ubuntu");
+            void evaluateFixture("fixture-authentic-ubuntu");
           }}
           className={`px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all ${
             mode === "demo"
@@ -260,7 +180,7 @@ export function EvidencePanel() {
                 checked={simulateScannerThreat}
                 onChange={(e) => {
                   setSimulateScannerThreat(e.target.checked);
-                  evaluateFixture(selectedFixtureId, fixtures, e.target.checked);
+                  void evaluateFixture(selectedFixtureId, fixtures, e.target.checked);
                 }}
                 className="rounded border-neutral-400 text-neutral-950 focus:ring-neutral-950"
               />
@@ -273,7 +193,7 @@ export function EvidencePanel() {
               <button
                 key={f.id}
                 type="button"
-                onClick={() => evaluateFixture(f.id, fixtures, simulateScannerThreat)}
+                onClick={() => void evaluateFixture(f.id, fixtures, simulateScannerThreat)}
                 className={`px-3 py-1.5 rounded text-xs transition-all ${
                   selectedFixtureId === f.id
                     ? "bg-neutral-950 text-white font-medium shadow-sm"
@@ -295,7 +215,7 @@ export function EvidencePanel() {
               Inspect Evidence for Downloaded Artifact
             </h4>
             <p className="text-xs text-neutral-500">
-              Upload a binary or paste a signed release manifest to synthesize verified cryptographic integrity, publisher authorship, and on-chain commitments.
+              Upload a binary and paste its signed release manifest to synthesize verified cryptographic integrity, publisher authorship, and on-chain commitments.
             </p>
           </div>
 
@@ -309,20 +229,14 @@ export function EvidencePanel() {
               />
             </div>
 
-            <div>
-              <label className="text-neutral-700 font-medium block mb-1">Publisher Ed25519 public key (hex):</label>
-              <input
-                type="text"
-                placeholder="e.g. 8580e9bff5..."
-                value={customPubKeyHex}
-                onChange={(e) => setCustomPubKeyHex(e.target.value)}
-                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 font-mono text-xs text-neutral-950 focus:outline-none focus:border-neutral-950"
-              />
-            </div>
+            <p className="text-[11px] text-neutral-600 self-end leading-relaxed">
+              The publisher key is resolved from the Monad Testnet registry using the manifest&apos;s
+              <code className="font-mono"> publisherId</code>.
+            </p>
           </div>
 
           <div className="text-xs">
-            <label className="text-neutral-700 font-medium block mb-1">Signed release manifest JSON (Optional):</label>
+            <label className="text-neutral-700 font-medium block mb-1">Signed release manifest JSON:</label>
             <textarea
               rows={3}
               placeholder="Paste manifest JSON..."

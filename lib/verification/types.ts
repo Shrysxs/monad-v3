@@ -27,6 +27,24 @@ export interface PublisherIdentity {
   authorizedAt: number;
 }
 
+/**
+ * Publisher entry as recorded in the SwarmTraceRegistry (or the demo registry).
+ * This is the ONLY trusted source of publisher signing keys; keys are never taken from user input.
+ */
+export interface RegistryPublisher {
+  publisherAddress: `0x${string}`;
+  publisherId: string;
+  /** Current authorized 32-byte Ed25519 public key */
+  ed25519PubKey: `0x${string}`;
+  /** Timestamp when publisher was authorized (UNIX ms) */
+  authorizedAt: number;
+  /** False once the registry admin deauthorizes the publisher */
+  isAuthorized: boolean;
+}
+
+/** Where the trusted publisher/release data came from. */
+export type TrustAnchorSource = "MONAD_TESTNET" | "DEMO_FIXTURE";
+
 // ============================================================================
 // 2. Canonical Release Manifest & Envelope
 // ============================================================================
@@ -116,6 +134,11 @@ export interface ReleaseRecord {
   fileHash: `0x${string}`;
   /** SHA-256 of canonical RFC 8785 manifest payload as bytes32 */
   manifestDigest: `0x${string}`;
+  /**
+   * Ed25519 key that was the publisher's authorized key when this release was registered.
+   * Manifests are verified against this key, so rotating keys does not invalidate older releases.
+   */
+  signingKey?: `0x${string}`;
   /** Predecessor release digest or 0x000... */
   previousReleaseDigest: `0x${string}`;
   /** On-chain status */
@@ -241,7 +264,10 @@ export interface VerificationVerdict {
   summary: string;
   fileIntegrity: FileIntegrityResult;
   signatureVerification: SignatureVerificationResult;
+  /** Release record bound to this exact manifest (unbound records are never returned) */
   releaseRecord?: ReleaseRecord;
+  /** Where the trusted publisher key / release record came from */
+  trustSource?: TrustAnchorSource;
   findings: EvidenceFinding[];
   /** Step-by-step audit explanations */
   explanations: string[];

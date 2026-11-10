@@ -118,7 +118,7 @@ contract SwarmTraceRegistryTest is Test {
         assertEq(rec.publisherId, PUB_ID_1);
 
         // Lookup by fileHash
-        ISwarmTraceRegistry.ReleaseRecord memory lookup = registry.getReleaseByFileHash(FILE_HASH_V1);
+        ISwarmTraceRegistry.ReleaseRecord memory lookup = registry.getReleaseByFileHash(PUB_ID_1, FILE_HASH_V1);
         assertEq(lookup.releaseDigest, digest);
     }
 
@@ -327,6 +327,52 @@ contract SwarmTraceRegistryTest is Test {
         assertEq(records.length, 2);
         assertEq(records[0].releaseDigest, d1);
         assertEq(records[1].releaseDigest, d2);
+    }
+
+    function test_RegisterRelease_RecordsSigningKey() public {
+        vm.prank(publisher1);
+        bytes32 digest = registry.registerRelease("swarmtrace-node", "1.0.0", FILE_HASH_V1, MANIFEST_DIGEST_V1, bytes32(0));
+        assertEq(registry.getRelease(digest).signingKey, PUB_ED25519_KEY_1);
+    }
+
+    function test_KeyRotation_PreservesSigningKeyOfEarlierReleases() public {
+        vm.prank(publisher1);
+        bytes32 oldDigest = registry.registerRelease("swarmtrace-node", "1.0.0", FILE_HASH_V1, MANIFEST_DIGEST_V1, bytes32(0));
+
+        bytes32 newKey = bytes32(hex"7777777777777777777777777777777777777777777777777777777777777777");
+        vm.prank(publisher1);
+        registry.rotateSigningKey(newKey);
+
+        vm.prank(publisher1);
+        bytes32 newDigest = registry.registerRelease("swarmtrace-node", "1.1.0", FILE_HASH_V2, MANIFEST_DIGEST_V2, oldDigest);
+
+        assertEq(registry.getRelease(oldDigest).signingKey, PUB_ED25519_KEY_1);
+        assertEq(registry.getRelease(newDigest).signingKey, newKey);
+        assertEq(registry.getPublisher(publisher1).ed25519PubKey, newKey);
+    }
+
+    function test_FileHashLookup_CannotBeShadowedByAnotherPublisher() public {
+        vm.prank(publisher1);
+        bytes32 victimDigest = registry.registerRelease("swarmtrace-node", "1.0.0", FILE_HASH_V1, MANIFEST_DIGEST_V1, bytes32(0));
+
+        vm.prank(publisher1);
+        registry.revokeRelease(victimDigest, "compromised build");
+
+        // A different authorized publisher registers the exact same file hash.
+        vm.prank(publisher2);
+        bytes32 shadowDigest = registry.registerRelease("fake-node", "9.9.9", FILE_HASH_V1, MANIFEST_DIGEST_V2, bytes32(0));
+
+        ISwarmTraceRegistry.ReleaseRecord memory victimView = registry.getReleaseByFileHash(PUB_ID_1, FILE_HASH_V1);
+        assertEq(victimView.releaseDigest, victimDigest);
+        assertEq(uint8(victimView.status), uint8(ISwarmTraceRegistry.ReleaseStatus.Revoked));
+
+        ISwarmTraceRegistry.ReleaseRecord memory shadowView = registry.getReleaseByFileHash(PUB_ID_2, FILE_HASH_V1);
+        assertEq(shadowView.releaseDigest, shadowDigest);
+    }
+
+    function test_FileHashLookup_UnknownPublisherReturnsEmpty() public view {
+        ISwarmTraceRegistry.ReleaseRecord memory rec = registry.getReleaseByFileHash("org.unknown", FILE_HASH_V1);
+        assertEq(uint8(rec.status), uint8(ISwarmTraceRegistry.ReleaseStatus.Unknown));
     }
 
     function testFuzz_CalculateReleaseDigest(

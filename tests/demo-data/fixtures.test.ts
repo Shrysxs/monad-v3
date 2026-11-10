@@ -1,17 +1,49 @@
 import { describe, it, expect } from "vitest";
-import { getDemoFixtures, DEMO_PUBLISHER } from "@/lib/demo-data/fixtures";
+import { getDemoFixtures, type DemoFixtureItem } from "@/lib/demo-data/fixtures";
 import { verifyFileAgainstManifest } from "@/lib/verification/engine";
 
 describe("Demo Data Fixtures", () => {
-  it("provides 5 cryptographically valid labeled fixtures", async () => {
+  function verifyFixture(f: DemoFixtureItem) {
+    return verifyFileAgainstManifest({
+      fileBytes: f.fileBytes,
+      fileName: f.fileName,
+      manifest: f.manifest,
+      publisher: f.publisher,
+      onChainRecord: f.releaseRecord,
+      trustSource: "DEMO_FIXTURE",
+    });
+  }
+
+  it("provides labeled fixtures backed by the demo registry", async () => {
     const fixtures = await getDemoFixtures();
-    expect(fixtures).toHaveLength(5);
+    expect(fixtures).toHaveLength(6);
 
     for (const f of fixtures) {
       expect(f.demoOnly).toBe(true);
       expect(f.manifest.schemaVersion).toBe("1.0.0");
-      expect(f.releaseRecord).toBeDefined();
+      expect(f.publisher).not.toBeNull();
     }
+  });
+
+  it.each([
+    ["fixture-authentic-ubuntu", "MATCHING_AUTHENTICATED_RELEASE"],
+    ["fixture-tampered-ubuntu", "HASH_MISMATCH"],
+    ["fixture-repacked-ubuntu", "INVALID_MANIFEST_SIGNATURE"],
+    ["fixture-revoked-monad", "REVOKED_RELEASE"],
+    ["fixture-superseded-monad", "SUPERSEDED_RELEASE"],
+    ["fixture-prerotation-monad", "MATCHING_AUTHENTICATED_RELEASE"],
+  ])("%s produces %s", async (id, expected) => {
+    const fixture = (await getDemoFixtures()).find((f) => f.id === id)!;
+    const verdict = await verifyFixture(fixture);
+    expect(verdict.status).toBe(expected);
+    expect(verdict.trustSource).toBe("DEMO_FIXTURE");
+  });
+
+  it("repacked fixture is unregistered and signed by a non-registered key", async () => {
+    const repack = (await getDemoFixtures()).find((f) => f.id === "fixture-repacked-ubuntu")!;
+    expect(repack.releaseRecord).toBeUndefined();
+    const verdict = await verifyFixture(repack);
+    expect(verdict.signatureVerification.isValid).toBe(false);
   });
 
   it("verifies authentic fixture matches cleanly", async () => {
@@ -22,7 +54,7 @@ describe("Demo Data Fixtures", () => {
       fileBytes: authentic.fileBytes,
       fileName: authentic.fileName,
       manifest: authentic.manifest,
-      publisherPublicKeyHex: DEMO_PUBLISHER.publicKeyHex,
+      publisher: authentic.publisher,
       onChainRecord: authentic.releaseRecord,
     });
 
@@ -39,7 +71,7 @@ describe("Demo Data Fixtures", () => {
       fileBytes: tampered.fileBytes,
       fileName: tampered.fileName,
       manifest: tampered.manifest,
-      publisherPublicKeyHex: DEMO_PUBLISHER.publicKeyHex,
+      publisher: tampered.publisher,
       onChainRecord: tampered.releaseRecord,
     });
 

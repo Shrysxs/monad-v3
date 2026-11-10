@@ -7,13 +7,49 @@ import type {
   SignedReleaseManifest,
   ReleaseManifestPayload,
   ReleaseRecord,
+  RegistryPublisher,
 } from "@/lib/verification/types";
 
 describe("Live Swarm Integrity Verification Engine", () => {
   const keyPair = generateEd25519KeyPair();
   const testFileBytes = new TextEncoder().encode("Hello SwarmTrace Monad Testnet!");
+  const PUBLISHER_ADDRESS = "0xCAFE000000000000000000000000000000000001" as const;
 
-  async function createSignedManifest(bytes: Uint8Array): Promise<{
+  /** Registry entry for the test publisher (the only trusted source of its key). */
+  const publisher: RegistryPublisher = {
+    publisherAddress: PUBLISHER_ADDRESS,
+    publisherId: "org.swarmtrace.core",
+    ed25519PubKey: `0x${keyPair.publicKeyHex}`,
+    authorizedAt: 0,
+    isAuthorized: true,
+  };
+
+  function boundRecord(
+    manifest: SignedReleaseManifest,
+    manifestDigest: string,
+    overrides: Partial<ReleaseRecord> = {}
+  ): ReleaseRecord {
+    return {
+      releaseDigest: "0x1111111111111111111111111111111111111111111111111111111111111111",
+      publisherAddress: PUBLISHER_ADDRESS,
+      publisherId: manifest.publisherId,
+      productId: manifest.productId,
+      releaseVersion: manifest.releaseVersion,
+      fileHash: `0x${manifest.sha256}`,
+      manifestDigest: `0x${manifestDigest}`,
+      signingKey: `0x${keyPair.publicKeyHex}`,
+      previousReleaseDigest: "0x0000000000000000000000000000000000000000000000000000000000000000",
+      status: "ACTIVE",
+      registeredAt: Date.now(),
+      blockNumber: 123456n,
+      ...overrides,
+    };
+  }
+
+  async function createSignedManifest(
+    bytes: Uint8Array,
+    signerPrivateKeyHex: string = keyPair.privateKeyHex
+  ): Promise<{
     manifest: SignedReleaseManifest;
     manifestDigest: string;
   }> {
@@ -34,7 +70,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
     };
 
     const canonical = canonicalizeRfc8785(payload);
-    const signature = signEd25519Message(canonical, keyPair.privateKeyHex);
+    const signature = signEd25519Message(canonical, signerPrivateKeyHex);
     const manifestDigest = await sha256Text(canonical);
 
     return {
@@ -66,7 +102,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
       fileBytes: testFileBytes,
       fileName: "swarmtrace-client-v1.0.0.tar.gz",
       manifest,
-      publisherPublicKeyHex: keyPair.publicKeyHex,
+      publisher,
       onChainRecord: activeRecord,
     });
 
@@ -89,7 +125,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
       fileBytes: tamperedBytes,
       fileName: "swarmtrace-client-v1.0.0.tar.gz",
       manifest,
-      publisherPublicKeyHex: keyPair.publicKeyHex,
+      publisher,
     });
 
     expect(verdict.status).toBe("HASH_MISMATCH");
@@ -108,7 +144,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
       fileBytes: testFileBytes,
       fileName: "swarmtrace-client-v1.0.0.tar.gz",
       manifest,
-      publisherPublicKeyHex: keyPair.publicKeyHex,
+      publisher,
     });
 
     expect(verdict.status).toBe("INVALID_MANIFEST_SIGNATURE");
@@ -137,7 +173,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
       fileBytes: testFileBytes,
       fileName: "swarmtrace-client-v1.0.0.tar.gz",
       manifest,
-      publisherPublicKeyHex: keyPair.publicKeyHex,
+      publisher,
       onChainRecord: revokedRecord,
     });
 
@@ -167,7 +203,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
       fileBytes: testFileBytes,
       fileName: "swarmtrace-client-v1.0.0.tar.gz",
       manifest,
-      publisherPublicKeyHex: keyPair.publicKeyHex,
+      publisher,
       onChainRecord: spoofedRecord,
     });
 
@@ -196,7 +232,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
       fileBytes: testFileBytes,
       fileName: "swarmtrace-client-v1.0.0.tar.gz",
       manifest,
-      publisherPublicKeyHex: keyPair.publicKeyHex,
+      publisher,
       onChainRecord: spoofedRecord,
     });
 
@@ -204,21 +240,103 @@ describe("Live Swarm Integrity Verification Engine", () => {
     expect(verdict.explanations.some((e) => e.includes("cryptographic tuple mismatch"))).toBe(true);
   });
 
-  it("flags KEY_UNAUTHORIZED when manifest signing key does not match authorized publisher key", async () => {
-    const { manifest } = await createSignedManifest(testFileBytes);
-    const otherKeyPair = generateEd25519KeyPair();
+  describe("trusted key resolution", () => {
+    it("never authenticates a manifest when the publisher is not registered (self-signed impostor)", async () => {
+      // Attacker signs their own manifest, claiming to be org.swarmtrace.core.
+      const attacker = generateEd25519KeyPair();
+      const { manifest } = await createSignedManifest(testFileBytes, attacker.privateKeyHex);
 
-    const verdict = await verifyFileAgainstManifest({
-      fileBytes: testFileBytes,
-      fileName: "swarmtrace-client-v1.0.0.tar.gz",
-      manifest,
-      publisherPublicKeyHex: keyPair.publicKeyHex,
-      authorizedPublisherPubKeyHex: otherKeyPair.publicKeyHex, // Different authorized key on Monad!
+      const verdict = await verifyFileAgainstManifest({
+        fileBytes: testFileBytes,
+        fileName: "swarmtrace-client-v1.0.0.tar.gz",
+        manifest,
+        publisher: null,
+      });
+
+      expect(verdict.status).toBe("UNKNOWN_RELEASE");
+      expect(verdict.signatureVerification.status).toBe("KEY_NOT_FOUND");
+      expect(verdict.signatureVerification.isValid).toBe(false);
     });
 
-    expect(verdict.status).toBe("UNAUTHORIZED_KEY");
-    expect(verdict.signatureVerification.isValid).toBe(false);
-    expect(verdict.signatureVerification.status).toBe("KEY_UNAUTHORIZED");
+    it("rejects a manifest re-signed with a key other than the registered one", async () => {
+      const attacker = generateEd25519KeyPair();
+      const { manifest } = await createSignedManifest(testFileBytes, attacker.privateKeyHex);
+
+      const verdict = await verifyFileAgainstManifest({
+        fileBytes: testFileBytes,
+        fileName: "swarmtrace-client-v1.0.0.tar.gz",
+        manifest,
+        publisher,
+      });
+
+      expect(verdict.status).toBe("INVALID_MANIFEST_SIGNATURE");
+      expect(verdict.signatureVerification.isValid).toBe(false);
+      expect(verdict.signatureVerification.publicKeyUsed).toBe(keyPair.publicKeyHex);
+    });
+
+    it("does not trust a deauthorized publisher, even with a valid signature and active record", async () => {
+      const { manifest, manifestDigest } = await createSignedManifest(testFileBytes);
+
+      const verdict = await verifyFileAgainstManifest({
+        fileBytes: testFileBytes,
+        fileName: "swarmtrace-client-v1.0.0.tar.gz",
+        manifest,
+        publisher: { ...publisher, isAuthorized: false },
+        onChainRecord: boundRecord(manifest, manifestDigest),
+      });
+
+      expect(verdict.status).toBe("UNAUTHORIZED_KEY");
+      expect(verdict.signatureVerification.status).toBe("KEY_REVOKED");
+      expect(verdict.signatureVerification.isValid).toBe(false);
+    });
+
+    it("keeps verifying a registered release after the publisher rotates keys", async () => {
+      const { manifest, manifestDigest } = await createSignedManifest(testFileBytes);
+      const rotatedKey = generateEd25519KeyPair();
+
+      const verdict = await verifyFileAgainstManifest({
+        fileBytes: testFileBytes,
+        fileName: "swarmtrace-client-v1.0.0.tar.gz",
+        manifest,
+        publisher: { ...publisher, ed25519PubKey: `0x${rotatedKey.publicKeyHex}` },
+        // Record still carries the key that was authorized when it was registered.
+        onChainRecord: boundRecord(manifest, manifestDigest),
+      });
+
+      expect(verdict.status).toBe("MATCHING_AUTHENTICATED_RELEASE");
+      expect(verdict.signatureVerification.publicKeyUsed).toBe(keyPair.publicKeyHex);
+    });
+
+    it("checks unregistered releases against the publisher's current key after rotation", async () => {
+      const { manifest } = await createSignedManifest(testFileBytes);
+      const rotatedKey = generateEd25519KeyPair();
+
+      const verdict = await verifyFileAgainstManifest({
+        fileBytes: testFileBytes,
+        fileName: "swarmtrace-client-v1.0.0.tar.gz",
+        manifest,
+        publisher: { ...publisher, ed25519PubKey: `0x${rotatedKey.publicKeyHex}` },
+      });
+
+      expect(verdict.status).toBe("INVALID_MANIFEST_SIGNATURE");
+    });
+
+    it("rejects a record registered by a different publisher account", async () => {
+      const { manifest, manifestDigest } = await createSignedManifest(testFileBytes);
+
+      const verdict = await verifyFileAgainstManifest({
+        fileBytes: testFileBytes,
+        fileName: "swarmtrace-client-v1.0.0.tar.gz",
+        manifest,
+        publisher,
+        onChainRecord: boundRecord(manifest, manifestDigest, {
+          publisherAddress: "0xBAD0000000000000000000000000000000000BAD",
+        }),
+      });
+
+      expect(verdict.status).toBe("UNKNOWN_RELEASE");
+      expect(verdict.releaseRecord).toBeUndefined();
+    });
   });
 
   it("explicitly returns NETWORK_ERROR when RPC communication fails", async () => {
@@ -228,7 +346,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
       fileBytes: testFileBytes,
       fileName: "swarmtrace-client-v1.0.0.tar.gz",
       manifest,
-      publisherPublicKeyHex: keyPair.publicKeyHex,
+      publisher,
       networkError: "Connection refused to https://testnet-rpc.monad.xyz",
     });
 
@@ -245,7 +363,7 @@ describe("Live Swarm Integrity Verification Engine", () => {
       fileBytes: testFileBytes,
       fileName: "swarmtrace-client-v1.0.0.tar.gz",
       manifest,
-      publisherPublicKeyHex: keyPair.publicKeyHex,
+      publisher,
     });
 
     // Chunk details must not be verified because metadata was incomplete

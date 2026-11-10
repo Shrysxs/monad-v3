@@ -23,14 +23,12 @@ import { verifyFileAgainstManifest } from "@/lib/verification/engine";
 import { parseAndValidateManifest } from "@/lib/manifests/manifest";
 import {
   getDemoFixtures,
-  DEMO_PUBLISHER,
-  DEMO_MONAD_PUBLISHER,
+  getDemoRegistryPublisher,
   type DemoFixtureItem,
 } from "@/lib/demo-data/fixtures";
 import { ChunkMatrix } from "./ChunkMatrix";
 import {
-  fetchOnChainReleaseByFileHash,
-  fetchPublisherById,
+  resolveRegistryTrustAnchors,
   getRegistryAddress,
 } from "@/lib/chain/contract";
 import type {
@@ -45,7 +43,6 @@ export function FileVerifier() {
   const [fileName, setFileName] = useState<string>("");
   const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null);
   const [manifestText, setManifestText] = useState<string>("");
-  const [publisherPubKey, setPublisherPubKey] = useState<string>(DEMO_PUBLISHER.publicKeyHex);
   const [onChainRecord, setOnChainRecord] = useState<ReleaseRecord | undefined>(undefined);
   const [isDemoData, setIsDemoData] = useState<boolean>(true);
   const [isDragging, setIsDragging] = useState<boolean>(false);
@@ -85,12 +82,6 @@ export function FileVerifier() {
     setIsDemoData(true);
     setVerdict(null);
     setErrorMessage(null);
-
-    if (f.manifest.publisherId === DEMO_MONAD_PUBLISHER.publisherId) {
-      setPublisherPubKey(DEMO_MONAD_PUBLISHER.publicKeyHex);
-    } else {
-      setPublisherPubKey(DEMO_PUBLISHER.publicKeyHex);
-    }
   }
 
   function copyText(key: string, text: string) {
@@ -169,10 +160,6 @@ export function FileVerifier() {
       setErrorMessage("Please provide a signed release manifest JSON.");
       return;
     }
-    if (!publisherPubKey.trim()) {
-      setErrorMessage("Please specify the publisher's Ed25519 public key hex.");
-      return;
-    }
 
     setIsVerifying(true);
     setErrorMessage(null);
@@ -189,41 +176,35 @@ export function FileVerifier() {
 
       setActiveManifest(parsed.manifest);
 
-      // 2. Query on-chain registry for publisher and release
-      setVerifyingStep("Inspecting Monad Testnet commitments...");
-      let effectiveRecord = onChainRecord;
-      let authorizedPubKeyFromChain: string | null = null;
-      let networkErrorMsg: string | null = null;
+      // 2. Resolve the trusted publisher key and release record from the registry.
+      //    The verification key is never taken from user input: it comes from the
+      //    registry entry for the publisherId the manifest claims.
+      let res: VerificationVerdict;
+      if (isDemoData) {
+        setVerifyingStep("Resolving publisher key from the demo registry...");
+        res = await verifyFileAgainstManifest({
+          fileBytes,
+          fileName,
+          manifest: parsed.manifest,
+          publisher: getDemoRegistryPublisher(parsed.manifest.publisherId),
+          onChainRecord,
+          trustSource: "DEMO_FIXTURE",
+        });
+      } else {
+        setVerifyingStep("Resolving publisher key and release commitment on Monad Testnet...");
+        const anchors = await resolveRegistryTrustAnchors(parsed.manifest, parsed.manifestDigest);
 
-      try {
-        const publisherInfo = await fetchPublisherById(parsed.manifest.publisherId);
-        if (publisherInfo) {
-          authorizedPubKeyFromChain = publisherInfo.ed25519PubKey;
-        }
-
-        if (!effectiveRecord) {
-          const liveRecord = await fetchOnChainReleaseByFileHash(
-            ("0x" + parsed.manifest.sha256) as `0x${string}`
-          );
-          if (liveRecord) {
-            effectiveRecord = liveRecord;
-          }
-        }
-      } catch (netErr: any) {
-        networkErrorMsg = netErr?.message || "Failed to query Monad Testnet RPC";
+        setVerifyingStep("Calculating whole-file SHA-256 and piece hashes in Web Crypto...");
+        res = await verifyFileAgainstManifest({
+          fileBytes,
+          fileName,
+          manifest: parsed.manifest,
+          publisher: anchors.publisher,
+          onChainRecord: anchors.releaseRecord,
+          networkError: anchors.networkError,
+          trustSource: "MONAD_TESTNET",
+        });
       }
-
-      // 3. Run verification engine
-      setVerifyingStep("Calculating whole-file SHA-256 and piece hashes in Web Crypto...");
-      const res = await verifyFileAgainstManifest({
-        fileBytes,
-        fileName,
-        manifest: parsed.manifest,
-        publisherPublicKeyHex: publisherPubKey.trim(),
-        onChainRecord: effectiveRecord,
-        authorizedPublisherPubKeyHex: authorizedPubKeyFromChain,
-        networkError: networkErrorMsg,
-      });
 
       setVerdict(res);
     } catch (err) {
@@ -262,7 +243,7 @@ export function FileVerifier() {
           badgeStyle: "bg-red-100 text-red-900 border-red-300",
           icon: <X className="w-5 h-5 text-red-700 shrink-0" />,
           summary:
-            "The Ed25519 signature does not match the manifest contents or publisher key. The release manifest cannot be authenticated.",
+            "The Ed25519 signature does not verify against the publisher's registered key. The manifest was altered or signed by someone else.",
         };
       case "UNAUTHORIZED_KEY":
         return {
@@ -271,16 +252,16 @@ export function FileVerifier() {
           badgeStyle: "bg-amber-100 text-amber-900 border-amber-300",
           icon: <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0" />,
           summary:
-            "The signing key used for this manifest is not registered as an authorized publisher key on Monad Testnet.",
+            "This publisher has been deauthorized in the registry. Its signatures are no longer trusted.",
         };
       case "UNKNOWN_RELEASE":
         return {
-          title: "Release not found",
+          title: "Not registered",
           style: "bg-neutral-100 border-neutral-300 text-neutral-900",
           badgeStyle: "bg-neutral-200 text-neutral-900 border-neutral-300",
           icon: <HelpCircle className="w-5 h-5 text-neutral-600 shrink-0" />,
           summary:
-            "No commitment for this release digest was found on the Monad Testnet registry. The file may be uncommitted or self-hosted.",
+            "The publisher or this exact release is not registered, so the file cannot be authenticated against a trusted key and commitment.",
         };
       case "NETWORK_ERROR":
         return {
@@ -289,7 +270,7 @@ export function FileVerifier() {
           badgeStyle: "bg-neutral-200 text-neutral-900 border-neutral-300",
           icon: <Info className="w-5 h-5 text-neutral-600 shrink-0" />,
           summary:
-            "Unable to reach the Monad Testnet RPC endpoint. Local file integrity and Ed25519 signature were verified, but on-chain status could not be fetched.",
+            "Unable to reach the Monad Testnet RPC endpoint. The publisher key and release status could not be fetched, so the manifest was not authenticated.",
         };
       case "REVOKED_RELEASE":
         return {
@@ -456,23 +437,15 @@ export function FileVerifier() {
               </label>
             </div>
             <p className="text-xs text-neutral-500">
-              Publisher-signed RFC 8785 envelope and declared Ed25519 public key.
+              Publisher-signed RFC 8785 release manifest.
             </p>
           </div>
 
           <div className="space-y-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-neutral-700">
-                Publisher Ed25519 public key (hex):
-              </label>
-              <input
-                type="text"
-                value={publisherPubKey}
-                onChange={(e) => setPublisherPubKey(e.target.value)}
-                className="w-full rounded-md bg-white border border-neutral-200 px-3 py-1.5 text-xs font-mono text-neutral-950 focus:outline-none focus:border-neutral-950 focus:ring-1 focus:ring-neutral-950"
-                placeholder="e.g. 8580e9bff52d9f..."
-              />
-            </div>
+            <p className="text-[11px] text-neutral-600 bg-neutral-50 border border-neutral-200 rounded-md px-3 py-2 leading-relaxed">
+              The publisher&apos;s Ed25519 key is looked up in the {isDemoData ? "demo registry" : "Monad Testnet registry"} by
+              the manifest&apos;s <code className="font-mono">publisherId</code>. It is never taken from the manifest or typed in.
+            </p>
 
             <div className="space-y-1">
               <label className="text-xs font-medium text-neutral-700">Signed manifest JSON:</label>
@@ -545,6 +518,11 @@ export function FileVerifier() {
                 <p className="text-xs sm:text-sm leading-relaxed max-w-3xl font-medium">
                   {banner.summary}
                 </p>
+                {verdict.trustSource === "DEMO_FIXTURE" && (
+                  <p className="mt-2 text-[11px] font-mono opacity-80">
+                    Demo mode: publisher keys and release records come from local fixtures, not Monad Testnet.
+                  </p>
+                )}
               </div>
             );
           })()}
@@ -627,12 +605,18 @@ export function FileVerifier() {
                 </p>
               </div>
               <div className="pl-8 sm:pl-0">
-                {verdict.status === "UNAUTHORIZED_KEY" ? (
+                {verdict.status === "NETWORK_ERROR" ? (
+                  <span className="inline-flex items-center space-x-1.5 text-xs font-medium text-neutral-700 bg-neutral-100 px-3 py-1 rounded border border-neutral-200">
+                    <span>Registry unreachable</span>
+                  </span>
+                ) : verdict.signatureVerification.status === "KEY_REVOKED" ||
+                  verdict.signatureVerification.status === "KEY_UNAUTHORIZED" ? (
                   <span className="inline-flex items-center space-x-1.5 text-xs font-semibold text-amber-800 bg-amber-50 px-3 py-1 rounded border border-amber-200">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
-                    <span>Key not authorized</span>
+                    <span>Publisher deauthorized</span>
                   </span>
-                ) : verdict.releaseRecord ? (
+                ) : verdict.signatureVerification.status === "VALID" ||
+                  verdict.signatureVerification.status === "INVALID" ? (
                   <span className="inline-flex items-center space-x-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1 rounded border border-emerald-200">
                     <Check className="w-3.5 h-3.5 text-emerald-700" />
                     <span>Authorized publisher</span>
@@ -775,7 +759,9 @@ export function FileVerifier() {
               <div className="space-y-1">
                 <div className="text-[11px] text-neutral-400 font-sans">Publisher Ed25519 Public Key:</div>
                 <div className="flex items-center justify-between p-2.5 rounded bg-neutral-900 border border-neutral-800 font-mono text-[11px] gap-2">
-                  <span className="truncate text-neutral-300">{verdict.signatureVerification.publicKeyUsed}</span>
+                  <span className="truncate text-neutral-300">
+                    {verdict.signatureVerification.publicKeyUsed || "No registered key available"}
+                  </span>
                   <button
                     type="button"
                     onClick={() => copyText("pubKey", verdict.signatureVerification.publicKeyUsed)}

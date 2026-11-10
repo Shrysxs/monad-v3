@@ -22,8 +22,10 @@ contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
     /// @notice Release commitment digest => Release record
     mapping(bytes32 => ReleaseRecord) private _releases;
 
-    /// @notice File SHA-256 hash => Release commitment digest
-    mapping(bytes32 => bytes32) private _fileHashToReleaseDigest;
+    /// @notice Publisher account => file SHA-256 hash => latest release commitment digest.
+    /// @dev Scoped per publisher: a global mapping would let any authorized publisher
+    ///      overwrite (shadow) another publisher's file-hash lookup.
+    mapping(address => mapping(bytes32 => bytes32)) private _fileHashToReleaseDigest;
 
     // --- Modifiers ---
 
@@ -182,6 +184,7 @@ contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
             releaseVersion: releaseVersion,
             fileHash: fileHash,
             manifestDigest: manifestDigest,
+            signingKey: publisher.ed25519PubKey,
             previousReleaseDigest: previousReleaseDigest,
             status: ReleaseStatus.Active,
             registeredAt: block.timestamp,
@@ -189,7 +192,7 @@ contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
             revokeReason: ""
         });
 
-        _fileHashToReleaseDigest[fileHash] = releaseDigest;
+        _fileHashToReleaseDigest[msg.sender][fileHash] = releaseDigest;
 
         emit ReleaseRegistered(
             releaseDigest,
@@ -300,8 +303,12 @@ contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
         return records;
     }
 
-    function getReleaseByFileHash(bytes32 fileHash) external view override returns (ReleaseRecord memory) {
-        bytes32 digest = _fileHashToReleaseDigest[fileHash];
+    function getReleaseByFileHash(
+        string calldata publisherId,
+        bytes32 fileHash
+    ) external view override returns (ReleaseRecord memory) {
+        address publisher = _publisherIdToAddress[publisherId];
+        bytes32 digest = _fileHashToReleaseDigest[publisher][fileHash];
         return _releases[digest];
     }
 

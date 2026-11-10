@@ -29,7 +29,7 @@ import { sha256Bytes } from "@/lib/crypto/hashing";
 import { parseAndValidateManifest } from "@/lib/manifests/manifest";
 import {
   fetchOnChainRelease,
-  fetchOnChainReleaseByFileHash,
+  resolveRegistryTrustAnchors,
   getRegistryAddress,
 } from "@/lib/chain/contract";
 import { LineageTimeline } from "./LineageTimeline";
@@ -186,6 +186,7 @@ export function VariantComparator() {
     let fileName = label;
     let fileSize = 0;
     let manifestData = undefined;
+    let manifestDigest: string | undefined;
 
     if (file) {
       const buffer = await file.arrayBuffer();
@@ -199,6 +200,7 @@ export function VariantComparator() {
       const parsed = await parseAndValidateManifest(manifestText);
       if (parsed.valid) {
         manifestData = parsed.manifest;
+        manifestDigest = parsed.manifestDigest;
         if (!sha256) sha256 = parsed.manifest.sha256;
         if (fileName === label) fileName = parsed.manifest.fileName;
         if (!fileSize) fileSize = parsed.manifest.fileSize;
@@ -215,20 +217,20 @@ export function VariantComparator() {
       throw new Error(`Please provide a file, manifest, or hash for ${label}.`);
     }
 
+    // Release records are resolved by exact release digest only: from the manifest when
+    // one is supplied, otherwise by treating the typed value as a release digest.
+    // Bare file-hash lookups are not used because they are not scoped to a publisher.
     let releaseRecord = undefined;
     try {
-      const formatted = ("0x" + sha256.replace(/^0x/, "")) as `0x${string}`;
-      const byHash = await fetchOnChainReleaseByFileHash(formatted);
-      if (byHash) {
-        releaseRecord = byHash;
-      } else {
-        const byDigest = await fetchOnChainRelease(formatted);
-        if (byDigest) {
-          releaseRecord = byDigest;
-        }
+      if (manifestData && manifestDigest) {
+        const anchors = await resolveRegistryTrustAnchors(manifestData, manifestDigest);
+        releaseRecord = anchors.releaseRecord ?? undefined;
+      } else if (cleanInput) {
+        const formatted = ("0x" + cleanInput.replace(/^0x/, "")) as `0x${string}`;
+        releaseRecord = (await fetchOnChainRelease(formatted)) ?? undefined;
       }
     } catch {
-      // Graceful fallback
+      // Registry unreachable: compare without on-chain status
     }
 
     return {
