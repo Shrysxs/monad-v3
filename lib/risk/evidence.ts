@@ -2,6 +2,7 @@ import type {
   EvidenceFinding,
   EvidenceFindingStatus,
   ReleaseRecord,
+  TrustAnchorSource,
   FileIntegrityResult,
   SignatureVerificationResult,
 } from "../verification/types";
@@ -42,9 +43,14 @@ export function aggregateRiskIntelligence(params: {
   releaseRecord?: ReleaseRecord | null;
   scannerConfig?: ScannerAdapterConfig;
   externalFindings?: EvidenceFinding[];
+  /** Where publisher keys / release records came from; demo data is labelled as such */
+  trustSource?: TrustAnchorSource;
 }): RiskIntelligenceReport {
   const { fileIntegrity, signatureVerification, releaseRecord, scannerConfig, externalFindings } =
     params;
+  const isDemo = params.trustSource === "DEMO_FIXTURE";
+  const registryName = isDemo ? "Demo Registry (local fixtures)" : "Monad Testnet Registry";
+  const registrySourceId = isDemo ? "demo-registry" : "monad-testnet-10143";
 
   const findings: EvidenceFinding[] = [];
   const explanationSteps: string[] = [];
@@ -65,14 +71,14 @@ export function aggregateRiskIntelligence(params: {
     sourceType: "PUBLISHER",
     title: "Publisher Ed25519 Cryptographic Signature",
     description: signatureVerification.isValid
-      ? `Valid Ed25519 signature verified for "${signatureVerification.publisherId}" against its registered key. Authorship confirmed.`
+      ? `Valid Ed25519 signature verified for "${signatureVerification.publisherId}" against its registered key${isDemo ? " (demo registry)" : ""}. Authorship confirmed.`
       : sigUnchecked
       ? `Publisher "${signatureVerification.publisherId}" is not registered, so no trusted key exists to check the signature against.`
       : signatureVerification.message,
     status: sigStatus,
     observedAt: now,
     isStale: false,
-    demoOnly: false,
+    demoOnly: isDemo,
   });
 
   explanationSteps.push(
@@ -116,35 +122,35 @@ export function aggregateRiskIntelligence(params: {
 
     findings.push({
       id: "finding-onchain-registry",
-      sourceId: "monad-testnet-10143",
+      sourceId: registrySourceId,
       sourceType: "ONCHAIN_REGISTRY",
-      title: "Monad Testnet Release Registry Record",
-      description: `On-chain status is ${releaseRecord.status}. Registered at block ${releaseRecord.blockNumber ?? "verified"}. ${
-        releaseRecord.revokeReason ? `Revocation reason: "${releaseRecord.revokeReason}".` : ""
-      }`,
+      title: `${registryName} Release Record`,
+      description: `Registry status is ${releaseRecord.status}.${
+        releaseRecord.blockNumber !== undefined ? ` Registered at block ${releaseRecord.blockNumber}.` : ""
+      }${releaseRecord.revokeReason ? ` Revocation reason: "${releaseRecord.revokeReason}".` : ""}`,
       status: regStatus,
       observedAt: releaseRecord.registeredAt || now,
       isStale: false,
-      demoOnly: false,
+      demoOnly: isDemo,
     });
 
     explanationSteps.push(
-      `Monad registry record verified: Release is currently ${releaseRecord.status}.`
+      `${registryName} record verified: release is currently ${releaseRecord.status}.`
     );
   } else {
     findings.push({
       id: "finding-onchain-registry-missing",
-      sourceId: "monad-testnet-10143",
+      sourceId: registrySourceId,
       sourceType: "ONCHAIN_REGISTRY",
-      title: "Monad Testnet Release Registry Record",
-      description: "No release commitment found for this digest on Monad Testnet.",
+      title: `${registryName} Release Record`,
+      description: `No release commitment found for this manifest in the ${registryName}.`,
       status: "UNAVAILABLE",
       observedAt: now,
       isStale: false,
-      demoOnly: false,
+      demoOnly: isDemo,
     });
 
-    explanationSteps.push("No on-chain registry commitment found on Monad Testnet.");
+    explanationSteps.push(`No commitment found in the ${registryName}.`);
   }
 
   // 4. Scanner Adapter Status (Honesty Rule: Never fake clean when no scanner ran)

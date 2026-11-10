@@ -1,4 +1,4 @@
-# SwarmTrace On-Chain vs. Off-Chain Verification Boundaries
+# PenguinTrace On-Chain vs. Off-Chain Verification Boundaries
 
 **Document Status:** Complete & Frozen  
 **Target Chain:** Monad Testnet (Chain ID 10143)  
@@ -7,7 +7,7 @@
 
 ## 1. Executive Summary
 
-A core architectural pillar of SwarmTrace is maintaining a clear, honest boundary between what is verified and recorded on-chain versus what is computed and validated off-chain.
+A core architectural pillar of PenguinTrace is maintaining a clear, honest boundary between what is verified and recorded on-chain versus what is computed and validated off-chain.
 
 Storing an Ed25519 public key on-chain records the authorized key identifier; it **does not** automatically execute Ed25519 curve point arithmetic on-chain (which is computationally prohibitive on standard EVM without dedicated precompiles). The table below specifies the exact boundary.
 
@@ -17,10 +17,10 @@ Storing an Ed25519 public key on-chain records the authorized key identifier; it
 
 | Verification Aspect | Location | Implementation & Mechanism | Rationale |
 |---|---|---|---|
-| **Publisher Address Authorization** | **On-Chain** | `ISwarmTraceRegistry.authorizePublisher` / `onlyAuthorizedPublisher` modifier | Establishes the authoritative root of trust for authorized publishing addresses on Monad. |
+| **Publisher Address Authorization** | **On-Chain** | `IPenguinTraceRegistry.authorizePublisher` / `onlyAuthorizedPublisher` modifier | Establishes the authoritative root of trust for authorized publishing addresses on Monad. |
 | **Publisher ID Uniqueness** | **On-Chain** | `_publisherIdToAddress[publisherId]` mapping check | Prevents publisher impersonation and identity collision. |
-| **Release Commitment Registration** | **On-Chain** | `ISwarmTraceRegistry.registerRelease` storing `releaseDigest` tuple | Creates an immutable, public, auditable timestamp and commitment on Monad Testnet. |
-| **Release Status & Revocation** | **On-Chain** | `ISwarmTraceRegistry.revokeRelease` / `supersedeRelease` | Ensures monotonic, tamper-evident status changes that any client can independently audit. |
+| **Release Commitment Registration** | **On-Chain** | `IPenguinTraceRegistry.registerRelease` storing `releaseDigest` tuple | Creates an immutable, public, auditable timestamp and commitment on Monad Testnet. |
+| **Release Status & Revocation** | **On-Chain** | `IPenguinTraceRegistry.revokeRelease` / `supersedeRelease` | Ensures monotonic, tamper-evident status changes that any client can independently audit. |
 | **Revocation Authority Check** | **On-Chain** | `msg.sender == release.publisherAddress \|\| msg.sender == owner()` | Prohibits unauthorized or competing accounts from revoking another publisher's release. |
 | **Raw File Byte Hashing** | **Off-Chain** | Client-side Web Crypto API `crypto.subtle.digest("SHA-256", bytes)` | File bytes never leave the user's machine; zero network bandwidth or privacy leakage. |
 | **Chunk / Piece Verification** | **Off-Chain** | Client-side incremental hashing comparing against `chunkHashes[i]` | Enables 60fps UI feedback for large multi-gigabyte torrent distributions. |

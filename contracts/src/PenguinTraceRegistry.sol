@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { ISwarmTraceRegistry } from "./interfaces/ISwarmTraceRegistry.sol";
+import { IPenguinTraceRegistry } from "./interfaces/IPenguinTraceRegistry.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
- * @title SwarmTraceRegistry
+ * @title PenguinTraceRegistry
  * @notice On-chain registry for authorized publisher commitments and release statuses on Monad.
  * @dev Stores minimal cryptographic commitments and state transitions.
  *      Never stores raw files, full manifests, private keys, or scan reports on-chain.
  */
-contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
+contract PenguinTraceRegistry is IPenguinTraceRegistry, Ownable {
     // --- State Storage ---
 
     /// @notice Publisher account address => Publisher metadata
@@ -43,7 +43,7 @@ contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
     // --- Write Methods ---
 
     /**
-     * @inheritdoc ISwarmTraceRegistry
+     * @inheritdoc IPenguinTraceRegistry
      */
     function authorizePublisher(
         address publisher,
@@ -86,7 +86,7 @@ contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
     }
 
     /**
-     * @inheritdoc ISwarmTraceRegistry
+     * @inheritdoc IPenguinTraceRegistry
      */
     function deauthorizePublisher(address publisher) external override onlyOwner {
         PublisherInfo storage info = _publishers[publisher];
@@ -100,7 +100,7 @@ contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
     }
 
     /**
-     * @inheritdoc ISwarmTraceRegistry
+     * @inheritdoc IPenguinTraceRegistry
      */
     function rotateSigningKey(bytes32 newEd25519PubKey) external override onlyAuthorizedPublisher {
         if (newEd25519PubKey == bytes32(0)) {
@@ -121,7 +121,7 @@ contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
     }
 
     /**
-     * @inheritdoc ISwarmTraceRegistry
+     * @inheritdoc IPenguinTraceRegistry
      */
     function registerRelease(
         string calldata productId,
@@ -215,7 +215,7 @@ contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
     }
 
     /**
-     * @inheritdoc ISwarmTraceRegistry
+     * @inheritdoc IPenguinTraceRegistry
      */
     function revokeRelease(bytes32 releaseDigest, string calldata reason) external override {
         ReleaseRecord storage release = _releases[releaseDigest];
@@ -254,7 +254,7 @@ contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
     }
 
     /**
-     * @inheritdoc ISwarmTraceRegistry
+     * @inheritdoc IPenguinTraceRegistry
      */
     function supersedeRelease(
         bytes32 oldReleaseDigest,

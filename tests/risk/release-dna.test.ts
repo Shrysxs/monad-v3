@@ -5,7 +5,7 @@ import type { SignedReleaseManifest, ReleaseRecord } from "@/lib/verification/ty
 describe("Release DNA Forensics Engine", () => {
   const dummyManifestA: SignedReleaseManifest = {
     schemaVersion: "1.0.0",
-    publisherId: "canonical-ubuntu",
+    publisherId: "com.example.aurora",
     productId: "ubuntu-server",
     releaseVersion: "24.04.1",
     fileName: "ubuntu-24.04.1-live-server-amd64.iso",
@@ -20,7 +20,7 @@ describe("Release DNA Forensics Engine", () => {
   const activeRecordA: ReleaseRecord = {
     releaseDigest: "0xaaaa111100000000000000000000000000000000000000000000000000000000",
     publisherAddress: "0x1111111111111111111111111111111111111111",
-    publisherId: "canonical-ubuntu",
+    publisherId: "com.example.aurora",
     productId: "ubuntu-server",
     releaseVersion: "24.04.1",
     fileHash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

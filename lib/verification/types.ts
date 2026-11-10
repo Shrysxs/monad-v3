@@ -1,5 +1,5 @@
 /**
- * SwarmTrace — Unified Shared Data Types (Source of Truth)
+ * PenguinTrace — Unified Shared Data Types (Source of Truth)
  * Phase 1 Architecture Freeze
  *
  * All agents (Agent A, Agent B, Agent C) must import types from this file.
@@ -11,7 +11,7 @@
 // ============================================================================
 
 export interface PublisherIdentity {
-  /** Canonical reverse-DNS identifier (e.g. "org.swarmtrace.core") */
+  /** Canonical reverse-DNS identifier (e.g. "org.penguintrace.core") */
   publisherId: string;
   /** Human-readable display name */
   displayName: string;
@@ -28,7 +28,7 @@ export interface PublisherIdentity {
 }
 
 /**
- * Publisher entry as recorded in the SwarmTraceRegistry (or the demo registry).
+ * Publisher entry as recorded in the PenguinTraceRegistry (or the demo registry).
  * This is the ONLY trusted source of publisher signing keys; keys are never taken from user input.
  */
 export interface RegistryPublisher {
@@ -58,7 +58,7 @@ export interface ReleaseManifestPayload {
   schemaVersion: "1.0.0";
   /** Publisher identifier matching on-chain record */
   publisherId: string;
-  /** Product/software identifier (e.g. "swarmtrace-client") */
+  /** Product/software identifier (e.g. "penguintrace-client") */
   productId: string;
   /** Semantic version string (e.g. "1.2.0") */
   releaseVersion: string;

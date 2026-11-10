@@ -205,4 +205,17 @@ describe("Swarm Risk Intelligence Aggregator", () => {
     expect(report.assessment).toBe("UNKNOWN_PROVENANCE");
     expect(report.hasConflictingFindings).toBe(false);
   });
+
+  it("labels registry evidence from demo fixtures as demo data, not Monad Testnet", () => {
+    const report = aggregateRiskIntelligence({
+      fileIntegrity: cleanIntegrityMatch,
+      signatureVerification: validSignature,
+      releaseRecord: activeReleaseRecord,
+      trustSource: "DEMO_FIXTURE",
+    });
+    const registry = report.findings.find((f) => f.sourceType === "ONCHAIN_REGISTRY")!;
+    expect(registry.demoOnly).toBe(true);
+    expect(registry.title).toContain("Demo Registry");
+    expect(registry.title).not.toContain("Monad");
+  });
 });

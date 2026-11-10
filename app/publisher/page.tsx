@@ -24,7 +24,7 @@ export default function PublisherPage() {
         <div className="space-y-0.5">
           <span className="font-bold text-neutral-950">Access control boundary: </span>
           <span>
-            Only authorized publisher EVM addresses registered in SwarmTraceRegistry can commit releases. Only the registering publisher or contract administrator can revoke a release.
+            Only authorized publisher EVM addresses registered in PenguinTraceRegistry can commit releases. Only the registering publisher or contract administrator can revoke a release.
           </span>
         </div>
       </div>

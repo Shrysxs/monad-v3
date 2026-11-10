@@ -5,6 +5,7 @@ import {
   generateEd25519KeyPair,
   signEd25519Message,
   verifyEd25519Signature,
+  hexToBytes,
 } from "@/lib/crypto/ed25519";
 import {
   parseAndValidateManifest,
@@ -21,13 +22,13 @@ describe("RFC 8785 Canonical JSON Serialization (JCS)", () => {
 
   it("omits undefined properties and strips whitespace", () => {
     const objWithUndefined = {
-      name: "SwarmTrace",
+      name: "PenguinTrace",
       version: "1.0.0",
       ignored: undefined,
       nested: { num: 42, empty: undefined },
     };
     const canonical = canonicalizeRfc8785(objWithUndefined);
-    expect(canonical).toBe('{"name":"SwarmTrace","nested":{"num":42},"version":"1.0.0"}');
+    expect(canonical).toBe('{"name":"PenguinTrace","nested":{"num":42},"version":"1.0.0"}');
   });
 
   it("handles arrays deterministically without whitespace", () => {
@@ -49,8 +50,8 @@ describe("Web Crypto API SHA-256 Hashing", () => {
     const emptyHash = await sha256Text("");
     expect(emptyHash).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
 
-    // SHA-256("SwarmTrace") = b45c9be6295325cbf368686ea9a7ffc3a5e840d0246f6f250cf4f58c7041fa3c (computed)
-    const hash = await sha256Text("SwarmTrace");
+    // SHA-256("PenguinTrace") = b45c9be6295325cbf368686ea9a7ffc3a5e840d0246f6f250cf4f58c7041fa3c (computed)
+    const hash = await sha256Text("PenguinTrace");
     expect(hash).toHaveLength(64);
   });
 
@@ -103,10 +104,10 @@ describe("Release Manifest Pipeline & Verification Vectors", () => {
 
   const validPayload: ReleaseManifestPayload = {
     schemaVersion: "1.0.0",
-    publisherId: "org.swarmtrace.core",
-    productId: "swarmtrace-node",
+    publisherId: "org.penguintrace.core",
+    productId: "penguintrace-node",
     releaseVersion: "1.0.0",
-    fileName: "swarmtrace-node-v1.0.0.tar.gz",
+    fileName: "penguintrace-node-v1.0.0.tar.gz",
     fileSize: 1048576,
     sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     publisherKeyId: "key-2026-v1",
@@ -174,7 +175,7 @@ describe("Release Manifest Pipeline & Verification Vectors", () => {
   it("rejects manifests with missing required fields", async () => {
     const missingFieldManifest = {
       schemaVersion: "1.0.0",
-      publisherId: "org.swarmtrace.core",
+      publisherId: "org.penguintrace.core",
       // missing productId
       releaseVersion: "1.0.0",
       fileName: "test.zip",
@@ -203,5 +204,48 @@ describe("Release Manifest Pipeline & Verification Vectors", () => {
     if (!validation.valid) {
       expect(validation.error).toBe("INVALID_DIGEST_FORMAT");
     }
+  });
+
+  it("verifies a manifest whose sha256 was signed with uppercase hex and a 0x prefix", async () => {
+    const payload = { ...validPayload, sha256: "0x" + validPayload.sha256.toUpperCase() };
+    const signature = signEd25519Message(canonicalizeRfc8785(payload), keyPair.privateKeyHex);
+
+    const validation = await parseAndValidateManifest(JSON.stringify({ ...payload, signature }));
+    expect(validation.valid).toBe(true);
+    if (validation.valid) {
+      const sig = await verifyManifestSignature(validation.manifest, keyPair.publicKeyHex);
+      expect(sig.isValid).toBe(true);
+    }
+  });
+
+  it("verifies a manifest that carries extra signed fields", async () => {
+    const payload = { ...validPayload, buildId: "ci-4821" };
+    const signature = signEd25519Message(canonicalizeRfc8785(payload), keyPair.privateKeyHex);
+
+    const validation = await parseAndValidateManifest(JSON.stringify({ ...payload, signature }));
+    expect(validation.valid).toBe(true);
+    if (validation.valid) {
+      expect((await verifyManifestSignature(validation.manifest, keyPair.publicKeyHex)).isValid).toBe(true);
+    }
+  });
+
+  it("rejects a non-integer chunkSize", async () => {
+    const result = await parseAndValidateManifest(
+      JSON.stringify({ ...validPayload, chunkSize: 1.5, signature: "aa".repeat(64) })
+    );
+    expect(result.valid).toBe(false);
+  });
+
+  it("rejects non-string chunk hashes without throwing", async () => {
+    const result = await parseAndValidateManifest(
+      JSON.stringify({ ...validPayload, chunkHashes: [42], signature: "aa".repeat(64) })
+    );
+    expect(result.valid).toBe(false);
+  });
+
+  it("refuses to decode malformed hex instead of producing zero bytes", () => {
+    expect(() => hexToBytes("zz")).toThrow();
+    expect(() => hexToBytes("abc")).toThrow();
+    expect(Array.from(hexToBytes("0x0aff"))).toEqual([10, 255]);
   });
 });

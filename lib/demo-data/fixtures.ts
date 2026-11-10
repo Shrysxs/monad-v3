@@ -16,7 +16,7 @@ import type {
 
 // Known deterministic Demo Publisher keypair
 export const DEMO_PUBLISHER = {
-  publisherId: "canonical-ubuntu",
+  publisherId: "com.example.aurora",
   publisherAddress: "0xCAFE000000000000000000000000000000000001" as `0x${string}`,
   publicKeyHex: "8580e9bff52d9f6cc5529540ab83c7166a8a46ec854071057e79f780c76868d4",
   privateKeyHex: "713417a9a6905ea197b3bd50c5c0920443fc822cf4e79a46844a6df11208805b",
@@ -24,26 +24,26 @@ export const DEMO_PUBLISHER = {
   demoOnly: true as const,
 };
 
-export const DEMO_MONAD_PUBLISHER = {
-  publisherId: "org.monad.core",
-  publisherAddress: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" as `0x${string}`,
+export const DEMO_NIMBUS_PUBLISHER = {
+  publisherId: "com.example.nimbus",
+  publisherAddress: "0xCAFE000000000000000000000000000000000002" as `0x${string}`,
   publicKeyHex: "f9a15e34ed813cf1f3d44d4f7dcfa9ba4fe0198235fece65437f55352976b258",
   privateKeyHex: "1c28c89c8942b101c519280d90db3132cc08f51bb1f2b6e15967735399ecf208",
-  keyId: "ed25519-monad-main",
+  keyId: "ed25519-nimbus-main",
   demoOnly: true as const,
 };
 
 /**
- * Older Monad publisher key, used before the demo publisher rotated to `DEMO_MONAD_PUBLISHER`'s
+ * Older Nimbus publisher key, used before the demo publisher rotated to `DEMO_NIMBUS_PUBLISHER`'s
  * current key. Releases registered while it was active must keep verifying after rotation.
  */
-export const DEMO_MONAD_LEGACY_KEY = {
+export const DEMO_NIMBUS_LEGACY_KEY = {
   publicKeyHex: "d6845abf5d8c58855e4f5cf3abe196c1a9ab0d0e012b45374a2b1c93cd9c72fd",
   privateKeyHex: "2f5e3e00af97d7f7f5c9d0959846c3ebe577cddcd72bcaef847dffa2c860bf8e",
-  keyId: "ed25519-monad-legacy",
+  keyId: "ed25519-nimbus-legacy",
 };
 
-/** Key held by an impostor who re-signs a repacked file while claiming to be the Ubuntu publisher. */
+/** Key held by an impostor who re-signs a repacked file while claiming to be the Aurora publisher. */
 export const DEMO_ATTACKER_KEY = {
   publicKeyHex: "cd7291ac1353c1c61b6a2ca2d8dcd0f688ee32759213d8ab8b680e24a994a3d4",
   privateKeyHex: "753bd6e553f0123fbab51f4e573cb8d3c18ca39dd6cb93f12711e8079567e13e",
@@ -54,7 +54,7 @@ type DemoPublisher = Omit<typeof DEMO_PUBLISHER, "publisherId"> & { publisherId:
 
 /** Simulated registry: publisherId -> publisher entry (current key + authorization). */
 const DEMO_REGISTRY: Record<string, RegistryPublisher> = Object.fromEntries(
-  [DEMO_PUBLISHER, DEMO_MONAD_PUBLISHER].map((p) => [
+  [DEMO_PUBLISHER, DEMO_NIMBUS_PUBLISHER].map((p) => [
     p.publisherId,
     {
       publisherAddress: p.publisherAddress,
@@ -149,7 +149,6 @@ export async function createDemoFixture(params: {
     status: params.status ?? "ACTIVE",
     revokeReason: params.revokeReason,
     registeredAt: Date.now() - 86400000,
-    blockNumber: 1042000n,
   };
 
   // If tamper requested, flip a byte in fileBytes
@@ -180,84 +179,84 @@ export async function getDemoFixtures(): Promise<DemoFixtureItem[]> {
   if (cachedFixtures) return cachedFixtures;
 
   const authentic = await createDemoFixture({
-    id: "fixture-authentic-ubuntu",
-    name: "Ubuntu 24.04.1 LTS (Authentic Official Release)",
-    description: "Official canonical AMD64 ISO image signed by Canonical release key. Matches on-chain active status.",
+    id: "fixture-authentic-aurora",
+    name: "Aurora Linux 24.04.1 (Authentic Release)",
+    description: "Fictional distribution image signed by its publisher's registered key. Registered as ACTIVE in the demo registry.",
     publisher: DEMO_PUBLISHER,
-    productId: "ubuntu-desktop-iso",
+    productId: "aurora-desktop-iso",
     releaseVersion: "24.04.1",
-    fileName: "ubuntu-24.04-desktop-amd64.iso",
-    rawText: "Canonical Ubuntu 24.04.1 LTS (Noble Numbat) Official AMD64 Production Release Image payload bytes [AUTHENTIC_DATA_2026]",
+    fileName: "aurora-24.04-desktop-amd64.iso",
+    rawText: "Aurora Linux 24.04.1 demo AMD64 desktop image payload bytes [AUTHENTIC_DEMO_DATA]",
     chunkSize: 16,
     status: "ACTIVE",
   });
 
   const tampered = await createDemoFixture({
-    id: "fixture-tampered-ubuntu",
-    name: "Ubuntu 24.04.1 LTS (1-Byte Tampered / Bit-Rot)",
-    description: "Same canonical manifest and valid signature, but 1 byte in chunk #0 is modified (simulating bit-rot or payload injection).",
+    id: "fixture-tampered-aurora",
+    name: "Aurora Linux 24.04.1 (1-Byte Tampered / Bit-Rot)",
+    description: "Same signed manifest, but 1 byte in piece #0 is modified (simulating bit-rot or payload injection).",
     publisher: DEMO_PUBLISHER,
-    productId: "ubuntu-desktop-iso",
+    productId: "aurora-desktop-iso",
     releaseVersion: "24.04.1",
-    fileName: "ubuntu-24.04-desktop-amd64.iso",
-    rawText: "Canonical Ubuntu 24.04.1 LTS (Noble Numbat) Official AMD64 Production Release Image payload bytes [AUTHENTIC_DATA_2026]",
+    fileName: "aurora-24.04-desktop-amd64.iso",
+    rawText: "Aurora Linux 24.04.1 demo AMD64 desktop image payload bytes [AUTHENTIC_DEMO_DATA]",
     chunkSize: 16,
     tamperFileByte: true,
     status: "ACTIVE",
   });
 
   const repacked = await createDemoFixture({
-    id: "fixture-repacked-ubuntu",
-    name: "Ubuntu 24.04.1 LTS (Unauthenticated Repack)",
-    description: "Identical filename and a manifest claiming to be from the Ubuntu publisher, but re-signed with an impostor's key and never registered. The signature fails against the registered publisher key.",
+    id: "fixture-repacked-aurora",
+    name: "Aurora Linux 24.04.1 (Unauthenticated Repack)",
+    description: "Identical filename and a manifest claiming to be from the Aurora publisher, but re-signed with an impostor's key and never registered. The signature fails against the registered publisher key.",
     publisher: DEMO_PUBLISHER,
     signer: DEMO_ATTACKER_KEY,
     registered: false,
-    productId: "ubuntu-desktop-iso",
+    productId: "aurora-desktop-iso",
     releaseVersion: "24.04.1",
-    fileName: "ubuntu-24.04-desktop-amd64.iso",
+    fileName: "aurora-24.04-desktop-amd64.iso",
     rawText: "UNTRUSTED_REPACK: Backdoored binary masquerading under identical filename with altered scripts and bundled telemetry.",
     chunkSize: 16,
     status: "ACTIVE",
   });
 
   const revoked = await createDemoFixture({
-    id: "fixture-revoked-monad",
-    name: "Monad Node v0.2.1 (Revoked On-Chain)",
-    description: "Cryptographically authentic file and valid signature, but explicitly revoked on Monad Testnet due to critical CVE.",
-    publisher: DEMO_MONAD_PUBLISHER,
-    productId: "monad-node-bin",
+    id: "fixture-revoked-nimbus",
+    name: "Nimbus Node v0.2.1 (Revoked)",
+    description: "Authentic file and valid signature, but revoked by its publisher in the demo registry after a (fictional) security advisory.",
+    publisher: DEMO_NIMBUS_PUBLISHER,
+    productId: "nimbus-node-bin",
     releaseVersion: "0.2.1",
-    fileName: "monad-node-v0.2.1-linux-amd64.tar.gz",
-    rawText: "Monad Validator Daemon v0.2.1 build with consensus edge-case bug [DO_NOT_RUN_REVOKED_BUILD]",
+    fileName: "nimbus-node-v0.2.1-linux-amd64.tar.gz",
+    rawText: "Nimbus Node v0.2.1 demo build [REVOKED_DEMO_BUILD]",
     chunkSize: 16,
     status: "REVOKED",
-    revokeReason: "Critical security vulnerability in consensus gossip handler CVE-2026-9812",
+    revokeReason: "Demo advisory: critical vulnerability in the gossip handler",
   });
 
   const superseded = await createDemoFixture({
-    id: "fixture-superseded-monad",
-    name: "Monad Node v0.1.0 (Superseded Historical Version)",
-    description: "Legitimate older release v0.1.0 superseded on Monad Testnet by newer active release v0.2.0.",
-    publisher: DEMO_MONAD_PUBLISHER,
-    productId: "monad-node-bin",
+    id: "fixture-superseded-nimbus",
+    name: "Nimbus Node v0.1.0 (Superseded Historical Version)",
+    description: "Legitimate older release v0.1.0, marked superseded in the demo registry by a newer version.",
+    publisher: DEMO_NIMBUS_PUBLISHER,
+    productId: "nimbus-node-bin",
     releaseVersion: "0.1.0",
-    fileName: "monad-node-v0.1.0-linux-amd64.tar.gz",
-    rawText: "Monad Validator Daemon v0.1.0 historical initial release [LEGITIMATE_HISTORICAL]",
+    fileName: "nimbus-node-v0.1.0-linux-amd64.tar.gz",
+    rawText: "Nimbus Node v0.1.0 demo initial release [HISTORICAL_DEMO_BUILD]",
     chunkSize: 16,
     status: "SUPERSEDED",
   });
 
   const preRotation = await createDemoFixture({
-    id: "fixture-prerotation-monad",
-    name: "Monad Node v0.2.0 (Signed Before Key Rotation)",
-    description: "Authentic release signed with the publisher's previous key. The publisher has since rotated keys; the release still verifies against the key recorded with it on-chain.",
-    publisher: DEMO_MONAD_PUBLISHER,
-    signer: DEMO_MONAD_LEGACY_KEY,
-    productId: "monad-node-bin",
+    id: "fixture-prerotation-nimbus",
+    name: "Nimbus Node v0.2.0 (Signed Before Key Rotation)",
+    description: "Authentic release signed with the publisher's previous key. The publisher has since rotated keys; the release still verifies against the key recorded with it in the registry.",
+    publisher: DEMO_NIMBUS_PUBLISHER,
+    signer: DEMO_NIMBUS_LEGACY_KEY,
+    productId: "nimbus-node-bin",
     releaseVersion: "0.2.0",
-    fileName: "monad-node-v0.2.0-linux-amd64.tar.gz",
-    rawText: "Monad Validator Daemon v0.2.0 stable build signed with legacy release key [PRE_ROTATION]",
+    fileName: "nimbus-node-v0.2.0-linux-amd64.tar.gz",
+    rawText: "Nimbus Node v0.2.0 demo build signed with legacy release key [PRE_ROTATION]",
     chunkSize: 16,
     status: "ACTIVE",
   });

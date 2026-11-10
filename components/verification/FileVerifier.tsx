@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { verifyFileAgainstManifest } from "@/lib/verification/engine";
 import { parseAndValidateManifest } from "@/lib/manifests/manifest";
+import { hashFile } from "@/lib/crypto/hash-file";
 import {
   getDemoFixtures,
   getDemoRegistryPublisher,
@@ -39,9 +40,11 @@ import type {
 
 export function FileVerifier() {
   const [fixtures, setFixtures] = useState<DemoFixtureItem[]>([]);
-  const [selectedFixtureId, setSelectedFixtureId] = useState<string>("fixture-authentic-ubuntu");
+  const [selectedFixtureId, setSelectedFixtureId] = useState<string>("fixture-authentic-aurora");
   const [fileName, setFileName] = useState<string>("");
+  // Fixture bytes (small, in memory) or a user-selected File (streamed, never loaded whole)
   const [fileBytes, setFileBytes] = useState<Uint8Array | null>(null);
+  const [localFile, setLocalFile] = useState<File | null>(null);
   const [manifestText, setManifestText] = useState<string>("");
   const [onChainRecord, setOnChainRecord] = useState<ReleaseRecord | undefined>(undefined);
   const [isDemoData, setIsDemoData] = useState<boolean>(true);
@@ -76,6 +79,7 @@ export function FileVerifier() {
     setSelectedFixtureId(f.id);
     setFileName(f.fileName);
     setFileBytes(f.fileBytes);
+    setLocalFile(null);
     setManifestText(JSON.stringify(f.manifest, null, 2));
     setOnChainRecord(f.releaseRecord);
     setActiveManifest(f.manifest);
@@ -91,19 +95,16 @@ export function FileVerifier() {
   }
 
   // Handle local user file upload
-  async function processSelectedFile(file: File) {
-    try {
-      const buffer = await file.arrayBuffer();
-      setFileName(file.name);
-      setFileBytes(new Uint8Array(buffer));
-      setIsDemoData(false);
-      setSelectedFixtureId("custom");
-      setOnChainRecord(undefined);
-      setVerdict(null);
-      setErrorMessage(null);
-    } catch (err) {
-      setErrorMessage("Could not read local file: " + (err as Error).message);
-    }
+  // Keep only the File handle: it is streamed from disk in a Web Worker at verification time.
+  function processSelectedFile(file: File) {
+    setFileName(file.name);
+    setLocalFile(file);
+    setFileBytes(null);
+    setIsDemoData(false);
+    setSelectedFixtureId("custom");
+    setOnChainRecord(undefined);
+    setVerdict(null);
+    setErrorMessage(null);
   }
 
   function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -152,7 +153,7 @@ export function FileVerifier() {
   }
 
   async function handleRunVerification() {
-    if (!fileBytes) {
+    if (!fileBytes && !localFile) {
       setErrorMessage("Please select or drop a target file.");
       return;
     }
@@ -179,11 +180,23 @@ export function FileVerifier() {
       // 2. Resolve the trusted publisher key and release record from the registry.
       //    The verification key is never taken from user input: it comes from the
       //    registry entry for the publisherId the manifest claims.
+      // Hash the selected file off the main thread, in pieces of the manifest's chunk size.
+      const chunkSize = Number.isSafeInteger(parsed.manifest.chunkSize) ? parsed.manifest.chunkSize : undefined;
+      const fileInput = localFile
+        ? {
+            fileDigest: await hashFile(localFile, {
+              chunkSize,
+              onProgress: (f) =>
+                setVerifyingStep(`Hashing ${localFile.name} locally (SHA-256)... ${Math.floor(f * 100)}%`),
+            }),
+          }
+        : { fileBytes: fileBytes! };
+
       let res: VerificationVerdict;
       if (isDemoData) {
         setVerifyingStep("Resolving publisher key from the demo registry...");
         res = await verifyFileAgainstManifest({
-          fileBytes,
+          ...fileInput,
           fileName,
           manifest: parsed.manifest,
           publisher: getDemoRegistryPublisher(parsed.manifest.publisherId),
@@ -194,9 +207,8 @@ export function FileVerifier() {
         setVerifyingStep("Resolving publisher key and release commitment on Monad Testnet...");
         const anchors = await resolveRegistryTrustAnchors(parsed.manifest, parsed.manifestDigest);
 
-        setVerifyingStep("Calculating whole-file SHA-256 and piece hashes in Web Crypto...");
         res = await verifyFileAgainstManifest({
-          fileBytes,
+          ...fileInput,
           fileName,
           manifest: parsed.manifest,
           publisher: anchors.publisher,
@@ -399,7 +411,7 @@ export function FileVerifier() {
               <div className="text-neutral-950 font-bold truncate flex items-center justify-between">
                 <span className="truncate">{fileName}</span>
                 <span className="text-[10px] font-normal text-neutral-500 font-sans ml-2 shrink-0">
-                  {fileBytes ? formatBytes(fileBytes.byteLength) : "0 B"}
+                  {localFile ? formatBytes(localFile.size) : fileBytes ? formatBytes(fileBytes.byteLength) : "0 B"}
                 </span>
               </div>
               <div className="text-neutral-500 text-[10px]">
@@ -466,7 +478,7 @@ export function FileVerifier() {
         <button
           type="button"
           onClick={handleRunVerification}
-          disabled={isVerifying || !fileBytes}
+          disabled={isVerifying || (!fileBytes && !localFile)}
           className="px-8 py-3.5 rounded-lg bg-neutral-950 hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 text-white font-semibold text-sm transition-all shadow-md active:scale-[0.99] flex items-center space-x-2"
         >
           {isVerifying ? (
@@ -641,7 +653,9 @@ export function FileVerifier() {
                   </span>
                 </div>
                 <p className="text-xs text-neutral-600 pl-8">
-                  On-chain lifecycle commitment in SwarmTraceRegistry on Monad Testnet
+                  {verdict.trustSource === "DEMO_FIXTURE"
+                    ? "Lifecycle commitment in the demo registry (local fixtures)"
+                    : "On-chain lifecycle commitment in PenguinTraceRegistry on Monad Testnet"}
                 </p>
               </div>
               <div className="pl-8 sm:pl-0">

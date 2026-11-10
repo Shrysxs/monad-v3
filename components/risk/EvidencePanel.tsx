@@ -21,12 +21,13 @@ import { getDemoFixtures, type DemoFixtureItem } from "@/lib/demo-data/fixtures"
 import { parseAndValidateManifest } from "@/lib/manifests/manifest";
 import { resolveRegistryTrustAnchors } from "@/lib/chain/contract";
 import { verifyFileAgainstManifest } from "@/lib/verification/engine";
+import { hashFile } from "@/lib/crypto/hash-file";
 import type { EvidenceFinding } from "@/lib/verification/types";
 
 export function EvidencePanel() {
   const [mode, setMode] = useState<"demo" | "live">("demo");
   const [fixtures, setFixtures] = useState<DemoFixtureItem[]>([]);
-  const [selectedFixtureId, setSelectedFixtureId] = useState<string>("fixture-authentic-ubuntu");
+  const [selectedFixtureId, setSelectedFixtureId] = useState<string>("fixture-authentic-aurora");
   const [simulateScannerThreat, setSimulateScannerThreat] = useState<boolean>(false);
   const [report, setReport] = useState<RiskIntelligenceReport | null>(null);
 
@@ -40,7 +41,7 @@ export function EvidencePanel() {
     async function load() {
       const items = await getDemoFixtures();
       setFixtures(items);
-      await evaluateFixture("fixture-authentic-ubuntu", items, false);
+      await evaluateFixture("fixture-authentic-aurora", items, false);
     }
     load();
   }, []);
@@ -85,6 +86,7 @@ export function EvidencePanel() {
       fileIntegrity: verdict.fileIntegrity,
       signatureVerification: verdict.signatureVerification,
       releaseRecord: verdict.releaseRecord,
+      trustSource: "DEMO_FIXTURE",
       scannerConfig: threatSimulated ? { enabled: true, apiKey: "demo_mock_key" } : undefined,
       externalFindings: threatSimulated ? externalFindings : undefined,
     });
@@ -111,8 +113,9 @@ export function EvidencePanel() {
 
       // Publisher key and release record come only from the Monad registry.
       const anchors = await resolveRegistryTrustAnchors(parsed.manifest, parsed.manifestDigest);
+      const chunkSize = Number.isSafeInteger(parsed.manifest.chunkSize) ? parsed.manifest.chunkSize : undefined;
       const verdict = await verifyFileAgainstManifest({
-        fileBytes: new Uint8Array(await customFile.arrayBuffer()),
+        fileDigest: await hashFile(customFile, { chunkSize }),
         fileName: customFile.name,
         manifest: parsed.manifest,
         publisher: anchors.publisher,
@@ -125,6 +128,7 @@ export function EvidencePanel() {
         fileIntegrity: verdict.fileIntegrity,
         signatureVerification: verdict.signatureVerification,
         releaseRecord: verdict.releaseRecord,
+        trustSource: "MONAD_TESTNET",
       });
 
       setReport(calculatedReport);
@@ -143,7 +147,7 @@ export function EvidencePanel() {
           type="button"
           onClick={() => {
             setMode("demo");
-            void evaluateFixture("fixture-authentic-ubuntu");
+            void evaluateFixture("fixture-authentic-aurora");
           }}
           className={`px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all ${
             mode === "demo"
