@@ -354,6 +354,43 @@ describe("Live Swarm Integrity Verification Engine", () => {
     expect(verdict.summary).toContain("Network error communicating with Monad Testnet");
   });
 
+  it("reports HASH_MISMATCH for a tampered file even when the registry is unreachable", async () => {
+    const { manifest } = await createSignedManifest(testFileBytes);
+    const tamperedBytes = new Uint8Array(testFileBytes);
+    tamperedBytes[3] ^= 0x01;
+
+    const verdict = await verifyFileAgainstManifest({
+      fileBytes: tamperedBytes,
+      fileName: "swarmtrace-client-v1.0.0.tar.gz",
+      manifest,
+      publisher: null,
+      networkError: "timeout",
+    });
+
+    expect(verdict.status).toBe("HASH_MISMATCH");
+    expect(verdict.explanations.some((e) => e.includes("timeout"))).toBe(true);
+  });
+
+  it("detects a truncated file via declared size and localizes the missing piece", async () => {
+    const { manifest, manifestDigest } = await createSignedManifest(testFileBytes);
+    const truncated = testFileBytes.slice(0, 16); // drop the whole second piece
+
+    const verdict = await verifyFileAgainstManifest({
+      fileBytes: truncated,
+      fileName: "swarmtrace-client-v1.0.0.tar.gz",
+      manifest,
+      publisher,
+      onChainRecord: boundRecord(manifest, manifestDigest),
+    });
+
+    expect(verdict.status).toBe("HASH_MISMATCH");
+    expect(verdict.fileIntegrity.expectedFileSize).toBe(testFileBytes.byteLength);
+    expect(verdict.fileIntegrity.chunksTotal).toBe(2);
+    expect(verdict.fileIntegrity.chunkDetails![0].status).toBe("MATCH");
+    expect(verdict.fileIntegrity.chunkDetails![1].status).toBe("MISMATCH");
+    expect(verdict.explanations.some((e) => e.includes("manifest declares"))).toBe(true);
+  });
+
   it("skips chunk verification when manifest chunk metadata is incomplete or inconsistent", async () => {
     const { manifest } = await createSignedManifest(testFileBytes);
     // Incomplete chunk metadata: file is 31 bytes, chunkSize is 16, so expected 2 chunks, but only 1 provided

@@ -174,6 +174,8 @@ export interface FileIntegrityResult {
   status: FileIntegrityStatus;
   fileName: string;
   fileSize: number;
+  /** Byte size declared in the manifest */
+  expectedFileSize?: number;
   computedSha256: string;
   expectedSha256?: string;
   chunksTotal?: number;
