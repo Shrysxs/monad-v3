@@ -375,6 +375,72 @@ contract SwarmTraceRegistryTest is Test {
         assertEq(uint8(rec.status), uint8(ISwarmTraceRegistry.ReleaseStatus.Unknown));
     }
 
+    function _register(address who, string memory product, string memory version, bytes32 fileHash, bytes32 manifestDigest)
+        internal
+        returns (bytes32)
+    {
+        vm.prank(who);
+        return registry.registerRelease(product, version, fileHash, manifestDigest, bytes32(0));
+    }
+
+    function test_Supersede_RejectsSelf() public {
+        bytes32 d = _register(publisher1, "swarmtrace-node", "1.0.0", FILE_HASH_V1, MANIFEST_DIGEST_V1);
+        vm.prank(publisher1);
+        vm.expectRevert();
+        registry.supersedeRelease(d, d);
+    }
+
+    function test_Supersede_RejectsOtherPublishersRelease() public {
+        bytes32 mine = _register(publisher1, "swarmtrace-node", "1.0.0", FILE_HASH_V1, MANIFEST_DIGEST_V1);
+        bytes32 theirs = _register(publisher2, "swarmtrace-node", "2.0.0", FILE_HASH_V2, MANIFEST_DIGEST_V2);
+        vm.prank(publisher1);
+        vm.expectRevert(abi.encodeWithSelector(ISwarmTraceRegistry.ProductMismatch.selector, theirs));
+        registry.supersedeRelease(mine, theirs);
+    }
+
+    function test_Supersede_RejectsDifferentProduct() public {
+        bytes32 a = _register(publisher1, "swarmtrace-node", "1.0.0", FILE_HASH_V1, MANIFEST_DIGEST_V1);
+        bytes32 b = _register(publisher1, "other-product", "1.0.0", FILE_HASH_V2, MANIFEST_DIGEST_V2);
+        vm.prank(publisher1);
+        vm.expectRevert(abi.encodeWithSelector(ISwarmTraceRegistry.ProductMismatch.selector, b));
+        registry.supersedeRelease(a, b);
+    }
+
+    function test_Supersede_RejectsRevokedReplacement() public {
+        bytes32 a = _register(publisher1, "swarmtrace-node", "1.0.0", FILE_HASH_V1, MANIFEST_DIGEST_V1);
+        bytes32 b = _register(publisher1, "swarmtrace-node", "1.1.0", FILE_HASH_V2, MANIFEST_DIGEST_V2);
+        vm.prank(publisher1);
+        registry.revokeRelease(b, "bad build");
+        vm.prank(publisher1);
+        vm.expectRevert();
+        registry.supersedeRelease(a, b);
+    }
+
+    function test_Supersede_SameProductSucceeds() public {
+        bytes32 a = _register(publisher1, "swarmtrace-node", "1.0.0", FILE_HASH_V1, MANIFEST_DIGEST_V1);
+        bytes32 b = _register(publisher1, "swarmtrace-node", "1.1.0", FILE_HASH_V2, MANIFEST_DIGEST_V2);
+        vm.prank(publisher1);
+        registry.supersedeRelease(a, b);
+        assertEq(uint8(registry.getReleaseStatus(a)), uint8(ISwarmTraceRegistry.ReleaseStatus.Superseded));
+    }
+
+    function test_Authorize_CannotRenamePublisherId() public {
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(ISwarmTraceRegistry.PublisherAlreadyExists.selector, PUB_ID_1));
+        registry.authorizePublisher(publisher1, "org.renamed", PUB_ED25519_KEY_1);
+        assertEq(registry.getPublisherById("org.renamed").publisherAddress, address(0));
+    }
+
+    function test_Authorize_ReauthorizeSameIdAfterDeauth() public {
+        vm.prank(admin);
+        registry.deauthorizePublisher(publisher1);
+        bytes32 newKey = bytes32(hex"5555555555555555555555555555555555555555555555555555555555555555");
+        vm.prank(admin);
+        registry.authorizePublisher(publisher1, PUB_ID_1, newKey);
+        assertTrue(registry.isAuthorizedPublisher(publisher1));
+        assertEq(registry.getPublisherById(PUB_ID_1).ed25519PubKey, newKey);
+    }
+
     function testFuzz_CalculateReleaseDigest(
         string memory pubId,
         string memory prodId,

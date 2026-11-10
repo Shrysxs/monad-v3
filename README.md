@@ -163,7 +163,7 @@ Runs 54 tests across 6 test suites:
 npm run contracts:test
 ```
 
-Runs 22 Solidity tests in `contracts/test/SwarmTraceRegistry.t.sol`:
+Runs 29 Solidity tests in `contracts/test/SwarmTraceRegistry.t.sol`:
 - Publisher authorization and deauthorization by contract owner
 - Release commitment registration and collision resistance
 - Per-release signing key recording across key rotation

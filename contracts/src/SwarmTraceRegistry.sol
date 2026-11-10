@@ -65,6 +65,13 @@ contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
             revert PublisherIdAlreadyRegistered(publisherId);
         }
 
+        // An account keeps its publisherId for life. Renaming would leave the old id
+        // pointing at this account and detach every release registered under it.
+        string memory currentId = _publishers[publisher].publisherId;
+        if (bytes(currentId).length != 0 && keccak256(bytes(currentId)) != keccak256(bytes(publisherId))) {
+            revert PublisherAlreadyExists(currentId);
+        }
+
         _publishers[publisher] = PublisherInfo({
             publisherAddress: publisher,
             publisherId: publisherId,
@@ -262,8 +269,21 @@ contract SwarmTraceRegistry is ISwarmTraceRegistry, Ownable {
         if (newRelease.status == ReleaseStatus.Unknown) {
             revert ReleaseNotFound(newReleaseDigest);
         }
+        if (oldReleaseDigest == newReleaseDigest) {
+            revert InvalidStatusTransition(oldRelease.status, ReleaseStatus.Superseded);
+        }
         if (oldRelease.status == ReleaseStatus.Revoked) {
             revert InvalidStatusTransition(ReleaseStatus.Revoked, ReleaseStatus.Superseded);
+        }
+        // The replacement must be a live release of the same product by the same publisher.
+        if (newRelease.status == ReleaseStatus.Revoked) {
+            revert InvalidStatusTransition(ReleaseStatus.Revoked, ReleaseStatus.Active);
+        }
+        if (
+            newRelease.publisherAddress != oldRelease.publisherAddress ||
+            keccak256(bytes(newRelease.productId)) != keccak256(bytes(oldRelease.productId))
+        ) {
+            revert ProductMismatch(newReleaseDigest);
         }
 
         if (msg.sender != oldRelease.publisherAddress && msg.sender != owner()) {
