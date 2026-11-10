@@ -56,33 +56,37 @@ function checkRecordBinding(
   return null;
 }
 
-/**
- * Executes full client-side file and manifest verification.
- */
-export async function verifyFileAgainstManifest(
-  options: VerifyFileOptions
-): Promise<VerificationVerdict> {
-  const {
-    fileBytes,
-    fileName,
-    manifest,
-    publisher,
-    onChainRecord,
-    networkError,
-    trustSource = "MONAD_TESTNET",
-  } = options;
-  const isDemo = trustSource === "DEMO_FIXTURE";
-  const registryLabel = isDemo ? "the demo registry" : "Monad Testnet";
+export interface AuthenticateManifestOptions {
+  manifest: SignedReleaseManifest;
+  publisher?: RegistryPublisher | null;
+  onChainRecord?: ReleaseRecord | null;
+  trustSource?: TrustAnchorSource;
+}
 
+export interface ManifestAuthentication {
+  signatureResult: SignatureVerificationResult;
+  /** Record that commits to exactly this manifest and publisher, or null */
+  boundRecord: ReleaseRecord | null;
+  /** Hex SHA-256 of the canonical manifest payload (no 0x) */
+  manifestDigestHex: string;
+  explanations: string[];
+}
+
+/**
+ * Authenticates a signed manifest against registry trust anchors, without needing the file.
+ *
+ * Shared by every page (verify, risk, release DNA) so trust decisions are made in one place:
+ *  1. computes the canonical manifest digest
+ *  2. binds the on-chain record to this exact manifest and publisher account
+ *  3. picks the verification key from the registry (release key, else current key)
+ *     and checks the signature; unregistered or deauthorized publishers are never trusted.
+ */
+export async function authenticateManifest(
+  options: AuthenticateManifestOptions
+): Promise<ManifestAuthentication> {
+  const { manifest, publisher, onChainRecord, trustSource = "MONAD_TESTNET" } = options;
+  const registryLabel = trustSource === "DEMO_FIXTURE" ? "the demo registry" : "Monad Testnet";
   const explanations: string[] = [];
-  const caveats: string[] = [
-    "A matching cryptographic hash establishes byte-level equivalence to the publisher reference; it does not prove the file is malware-free.",
-    "A hash mismatch proves the file differs from the reference artifact; it does not automatically indicate malicious intent.",
-    "A filename is an informational display label and is never proof of publisher identity.",
-  ];
-  if (isDemo) {
-    caveats.push("Publisher keys and release records in this result come from local demo fixtures, not from Monad Testnet.");
-  }
 
   // 1. Canonical manifest digest (needed to bind the on-chain record before choosing a key)
   const { signature: _sig, ...payload } = manifest;
@@ -144,6 +148,42 @@ export async function verifyFileAgainstManifest(
       : `Manifest signature does not verify against ${keyLabel} (${shortKey(keyHex)}). The manifest was altered or signed by an unauthorized key.`;
   }
   explanations.push(signatureResult.message);
+
+  return { signatureResult, boundRecord, manifestDigestHex, explanations };
+}
+
+/**
+ * Executes full client-side file and manifest verification.
+ */
+export async function verifyFileAgainstManifest(
+  options: VerifyFileOptions
+): Promise<VerificationVerdict> {
+  const {
+    fileBytes,
+    fileName,
+    manifest,
+    publisher,
+    onChainRecord,
+    networkError,
+    trustSource = "MONAD_TESTNET",
+  } = options;
+  const isDemo = trustSource === "DEMO_FIXTURE";
+  const registryLabel = isDemo ? "the demo registry" : "Monad Testnet";
+
+  const explanations: string[] = [];
+  const caveats: string[] = [
+    "A matching cryptographic hash establishes byte-level equivalence to the publisher reference; it does not prove the file is malware-free.",
+    "A hash mismatch proves the file differs from the reference artifact; it does not automatically indicate malicious intent.",
+    "A filename is an informational display label and is never proof of publisher identity.",
+  ];
+  if (isDemo) {
+    caveats.push("Publisher keys and release records in this result come from local demo fixtures, not from Monad Testnet.");
+  }
+
+  // 1-3. Authenticate the manifest (record binding + registry key + signature)
+  const auth = await authenticateManifest({ manifest, publisher, onChainRecord, trustSource });
+  const { signatureResult, boundRecord } = auth;
+  explanations.push(...auth.explanations);
 
   // 4. Compute Whole-File SHA-256
   const computedSha256 = await sha256Bytes(fileBytes);

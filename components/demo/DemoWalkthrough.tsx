@@ -18,6 +18,7 @@ import {
   CheckCheck,
 } from "lucide-react";
 import { getDemoFixtures, type DemoFixtureItem } from "@/lib/demo-data/fixtures";
+import { buildArtifactProfile } from "@/lib/risk/artifact-profile";
 import { verifyFileAgainstManifest } from "@/lib/verification/engine";
 import { compareArtifacts, type ReleaseDnaComparison } from "@/lib/risk/release-dna";
 import { aggregateRiskIntelligence, type RiskIntelligenceReport } from "@/lib/risk/evidence";
@@ -93,26 +94,17 @@ export function DemoWalkthrough() {
         }
 
         if (authentic && repacked) {
-          const comp = compareArtifacts(
-            {
-              id: authentic.id,
-              fileName: authentic.fileName,
-              fileSize: authentic.fileBytes.byteLength,
-              sha256: authentic.manifest.sha256,
-              manifest: authentic.manifest,
-              releaseRecord: authentic.releaseRecord,
-              isDemo: true,
-            },
-            {
-              id: repacked.id,
-              fileName: repacked.fileName,
-              fileSize: repacked.fileBytes.byteLength,
-              sha256: "deadbeef777788889999aaaabbbbccccddddeeeeffff00001111222233334444",
-              manifest: undefined,
-              releaseRecord: undefined,
-              isDemo: true,
-            }
-          );
+          const toProfile = (f: DemoFixtureItem) =>
+            buildArtifactProfile({
+              id: f.id,
+              fileName: f.fileName,
+              fileBytes: f.fileBytes,
+              manifest: f.manifest,
+              publisher: f.publisher,
+              onChainRecord: f.releaseRecord,
+              trustSource: "DEMO_FIXTURE",
+            });
+          const comp = compareArtifacts(await toProfile(authentic), await toProfile(repacked));
           setStep3Comparison(comp);
         }
       } catch (err) {

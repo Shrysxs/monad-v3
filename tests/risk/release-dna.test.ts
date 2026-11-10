@@ -95,6 +95,7 @@ describe("Release DNA Forensics Engine", () => {
         fileName: "ubuntu-24.04.0-live-server-amd64.iso",
         sha256: "1111111111111111111111111111111111111111111111111111111111111111",
       },
+      authenticated: true,
       releaseRecord: {
         ...activeRecordA,
         releaseVersion: "24.04.0",
@@ -113,6 +114,7 @@ describe("Release DNA Forensics Engine", () => {
         fileName: "ubuntu-24.04.1-live-server-amd64.iso",
         sha256: "2222222222222222222222222222222222222222222222222222222222222222",
       },
+      authenticated: true,
       releaseRecord: {
         ...activeRecordA,
         releaseVersion: "24.04.1",
@@ -226,5 +228,55 @@ describe("Release DNA Forensics Engine", () => {
     expect(comparison.diff.onChainLineageVerified).toBe(true);
     expect(comparison.diff.onChainPredecessor).toBe("B");
     expect(comparison.verdictTitle).toBe("Authenticated On-Chain Supersession");
+  });
+
+  it("does not treat a claimed publisher name as identity when manifests are unauthenticated", () => {
+    const base = {
+      fileSize: 10,
+      manifest: { ...dummyManifestA, releaseVersion: "1.0.0" },
+      authenticated: false,
+    };
+    const comparison = compareArtifacts(
+      { ...base, id: "a", fileName: "a.bin", sha256: "1".repeat(64) },
+      { ...base, id: "b", fileName: "b.bin", sha256: "2".repeat(64), manifest: { ...dummyManifestA, releaseVersion: "2.0.0" } }
+    );
+    expect(comparison.relationship).toBe("UNKNOWN_VARIANT");
+    expect(comparison.diff.publisherMatch).toBe(false);
+    expect(comparison.diff.claimedPublisherMatch).toBe(true);
+  });
+
+  it("draws the supersedes edge from the newer release to its predecessor", () => {
+    const v1Digest = "0x1111000000000000000000000000000000000000000000000000000000000000";
+    const old: ArtifactProfile = {
+      id: "old",
+      fileName: "v1.tar.gz",
+      fileSize: 1,
+      sha256: "1".repeat(64),
+      releaseRecord: { ...activeRecordA, releaseDigest: v1Digest, status: "SUPERSEDED" },
+    };
+    const newer: ArtifactProfile = {
+      id: "new",
+      fileName: "v2.tar.gz",
+      fileSize: 1,
+      sha256: "2".repeat(64),
+      releaseRecord: {
+        ...activeRecordA,
+        releaseDigest: "0x2222000000000000000000000000000000000000000000000000000000000000",
+        previousReleaseDigest: v1Digest,
+      },
+    };
+    const comparison = compareArtifacts(old, newer);
+    expect(comparison.lineageEdges[0]).toEqual({ source: "new", target: "old", relationship: "supersedes" });
+  });
+
+  it("reports revocation even when both artifacts are identical", () => {
+    const art: ArtifactProfile = {
+      id: "x",
+      fileName: "x.bin",
+      fileSize: 1,
+      sha256: "1".repeat(64),
+      releaseRecord: { ...activeRecordA, status: "REVOKED" },
+    };
+    expect(compareArtifacts(art, { ...art, id: "y" }).relationship).toBe("REVOKED_VARIANT");
   });
 });

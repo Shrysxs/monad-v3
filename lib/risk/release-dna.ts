@@ -18,7 +18,15 @@ export interface ArtifactProfile {
   fileSize: number;
   sha256: string;
   manifest?: SignedReleaseManifest;
+  /**
+   * True only when the manifest signature verified against the publisher's registered key
+   * (see `authenticateManifest`). Unverified manifests are treated as claims, not identity.
+   */
+  authenticated?: boolean;
+  /** Release record bound to this exact manifest (unbound records must not be supplied) */
   releaseRecord?: ReleaseRecord;
+  /** Piece hashes computed from the local file bytes (preferred over manifest-declared hashes) */
+  computedChunkHashes?: string[];
   isDemo?: boolean;
 }
 
@@ -27,7 +35,12 @@ export interface ComparisonDiff {
   hashMatch: boolean;
   sizeMatch: boolean;
   sizeDeltaBytes: number;
+  /** Same publisher, and both manifests authenticated against that publisher's registered key */
   publisherMatch: boolean;
+  /** Same publisherId claimed in both manifests, whether or not they are authenticated */
+  claimedPublisherMatch: boolean;
+  authenticatedA: boolean;
+  authenticatedB: boolean;
   versionMatch: boolean;
   versionA?: string;
   versionB?: string;
@@ -84,7 +97,11 @@ export function compareArtifacts(
 
   const pubA = artifactA.manifest?.publisherId ?? artifactA.releaseRecord?.publisherId;
   const pubB = artifactB.manifest?.publisherId ?? artifactB.releaseRecord?.publisherId;
-  const publisherMatch = !!(pubA && pubB && pubA === pubB);
+  const authenticatedA = artifactA.authenticated === true;
+  const authenticatedB = artifactB.authenticated === true;
+  const claimedPublisherMatch = !!(pubA && pubB && pubA === pubB);
+  // Publisher identity is only established by an authenticated signature, never by a name.
+  const publisherMatch = claimedPublisherMatch && authenticatedA && authenticatedB;
 
   const verA = artifactA.manifest?.releaseVersion ?? artifactA.releaseRecord?.releaseVersion;
   const verB = artifactB.manifest?.releaseVersion ?? artifactB.releaseRecord?.releaseVersion;
@@ -95,8 +112,8 @@ export function compareArtifacts(
 
   // Chunk diff calculation if both provide chunk hashes
   let chunkDiff: ComparisonDiff["chunkDiff"];
-  const chunksA = artifactA.manifest?.chunkHashes;
-  const chunksB = artifactB.manifest?.chunkHashes;
+  const chunksA = artifactA.computedChunkHashes ?? artifactA.manifest?.chunkHashes;
+  const chunksB = artifactB.computedChunkHashes ?? artifactB.manifest?.chunkHashes;
 
   if (chunksA && chunksB) {
     const minLen = Math.min(chunksA.length, chunksB.length);
@@ -120,7 +137,8 @@ export function compareArtifacts(
   let onChainLineageVerified = false;
   let onChainPredecessor: "A" | "B" | "NONE" = "NONE";
 
-  if (recA && recB) {
+  // Lineage pointers are only meaningful between records of the same publisher.
+  if (recA && recB && recA.publisherAddress.toLowerCase() === recB.publisherAddress.toLowerCase()) {
     const prevA = recA.previousReleaseDigest?.toLowerCase().replace(/^0x/, "");
     const prevB = recB.previousReleaseDigest?.toLowerCase().replace(/^0x/, "");
     const digA = recA.releaseDigest?.toLowerCase().replace(/^0x/, "");
@@ -141,14 +159,17 @@ export function compareArtifacts(
   let verdictTitle: string;
   let explanation: string;
 
-  if (hashMatch) {
+  // Revocation is checked first: an identical copy of a revoked release is still revoked.
+  if (statusA === "REVOKED" || statusB === "REVOKED") {
+    relationship = "REVOKED_VARIANT";
+    verdictTitle = "Revoked Release Detected";
+    explanation = hashMatch
+      ? "Both artifacts are byte-identical, and this release has been revoked by its publisher."
+      : "At least one compared artifact is associated with a release explicitly revoked on Monad.";
+  } else if (hashMatch) {
     relationship = "EXACT_MATCH";
     verdictTitle = "Identical Artifacts";
     explanation = "Both artifacts have matching SHA-256 hashes and represent the identical byte payload.";
-  } else if (statusA === "REVOKED" || statusB === "REVOKED") {
-    relationship = "REVOKED_VARIANT";
-    verdictTitle = "Revoked Release Detected";
-    explanation = "At least one compared artifact is associated with a release explicitly revoked on Monad.";
   } else if (onChainLineageVerified) {
     relationship = "SUPERSEDED_VARIANT";
     verdictTitle = "Authenticated On-Chain Supersession";
@@ -160,18 +181,25 @@ export function compareArtifacts(
     relationship = "SUPERSEDED_VARIANT";
     verdictTitle = "Superseded Historical Version";
     explanation = "One artifact represents a legitimate older release that has been superseded by an update.";
-  } else if (publisherMatch && verA !== verB && verA && verB) {
+  } else if (publisherMatch && verA && verB && verA !== verB) {
     relationship = "VERSION_UPDATE";
     verdictTitle = "Version Evolution";
-    explanation = `Artifacts represent different versions (${verA} vs ${verB}) published by the same authenticated vendor (${pubA}).`;
-  } else if (fileNameMatch && !hashMatch) {
+    explanation = `Artifacts represent different versions (${verA} vs ${verB}), both authenticated against the registered key of ${pubA}.`;
+  } else if (fileNameMatch) {
     relationship = "SAME_NAME_DIFFERENT_HASH";
     verdictTitle = "Identical Filename, Different Content";
     explanation = `Both artifacts are named "${artifactA.fileName}", but their byte contents and SHA-256 hashes differ. Filename alone does not prove identical origin.`;
+    if (authenticatedA !== authenticatedB) {
+      explanation += ` Only Artifact ${authenticatedA ? "A" : "B"} is authenticated by the publisher's registered key.`;
+    } else if (claimedPublisherMatch && !authenticatedA) {
+      explanation += " Both claim the same publisher, but neither manifest is authenticated.";
+    }
   } else {
     relationship = "UNKNOWN_VARIANT";
     verdictTitle = "Unknown or Uncorrelated Artifacts";
-    explanation = "No authenticated common publisher or lineage relationship links these two artifacts.";
+    explanation = claimedPublisherMatch
+      ? "Both artifacts claim the same publisher, but this is not authenticated, so no relationship can be established."
+      : "No authenticated common publisher or lineage relationship links these two artifacts.";
   }
 
   const diff: ComparisonDiff = {
@@ -180,6 +208,9 @@ export function compareArtifacts(
     sizeMatch,
     sizeDeltaBytes,
     publisherMatch,
+    claimedPublisherMatch,
+    authenticatedA,
+    authenticatedB,
     versionMatch,
     versionA: verA,
     versionB: verB,
@@ -212,16 +243,20 @@ export function compareArtifacts(
     },
   ];
 
+  // "supersedes" is only drawn for on-chain lineage, pointing from the newer release to
+  // its predecessor. Everything else is an undirected variant relationship.
+  let edgeSource = artifactA.id;
+  let edgeTarget = artifactB.id;
+  let edgeRelationship: LineageEdge["relationship"] = hashMatch ? "identical_to" : "variant_of";
+  if (!hashMatch && onChainLineageVerified) {
+    edgeRelationship = "supersedes";
+    if (onChainPredecessor === "A") {
+      edgeSource = artifactB.id;
+      edgeTarget = artifactA.id;
+    }
+  }
   const lineageEdges: LineageEdge[] = [
-    {
-      source: artifactA.id,
-      target: artifactB.id,
-      relationship: hashMatch
-        ? "identical_to"
-        : relationship === "VERSION_UPDATE" || relationship === "SUPERSEDED_VARIANT"
-        ? "supersedes"
-        : "variant_of",
-    },
+    { source: edgeSource, target: edgeTarget, relationship: edgeRelationship },
   ];
 
   return {

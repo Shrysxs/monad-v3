@@ -21,11 +21,10 @@ import {
 } from "@/lib/risk/release-dna";
 import {
   getDemoFixtures,
-  DEMO_PUBLISHER,
-  DEMO_MONAD_PUBLISHER,
   type DemoFixtureItem,
 } from "@/lib/demo-data/fixtures";
-import { sha256Bytes } from "@/lib/crypto/hashing";
+import { buildArtifactProfile } from "@/lib/risk/artifact-profile";
+import type { ReleaseRecord } from "@/lib/verification/types";
 import { parseAndValidateManifest } from "@/lib/manifests/manifest";
 import {
   fetchOnChainRelease,
@@ -69,107 +68,43 @@ export function VariantComparator() {
       const items = await getDemoFixtures();
       setFixtures(items);
       if (items.length > 0) {
-        applyPreset("same-name-different-hash", items);
+        void applyPreset("same-name-different-hash", items);
       }
     }
     loadFixtures();
   }, []);
 
-  function applyPreset(presetKey: string, items = fixtures) {
+  async function applyPreset(presetKey: string, items = fixtures) {
     setActivePreset(presetKey);
-    if (items.length < 5) return;
+    const byId = (id: string) => items.find((f) => f.id === id);
+    const authentic = byId("fixture-authentic-ubuntu");
+    const tampered = byId("fixture-tampered-ubuntu");
+    const repacked = byId("fixture-repacked-ubuntu");
+    const revoked = byId("fixture-revoked-monad");
+    const superseded = byId("fixture-superseded-monad");
+    if (!authentic || !tampered || !repacked || !revoked || !superseded) return;
 
-    const authenticUbuntu = items.find((f) => f.id === "fixture-authentic-ubuntu")!;
-    const tamperedUbuntu = items.find((f) => f.id === "fixture-tampered-ubuntu")!;
-    const repackedUbuntu = items.find((f) => f.id === "fixture-repacked-ubuntu")!;
-    const revokedMonad = items.find((f) => f.id === "fixture-revoked-monad")!;
-    const supersededMonad = items.find((f) => f.id === "fixture-superseded-monad")!;
+    // Every preset is built from the real fixture bytes and verified against the demo
+    // registry, exactly like a user-supplied file would be.
+    const profile = (f: DemoFixtureItem, id: string) =>
+      buildArtifactProfile({
+        id,
+        fileName: f.fileName,
+        fileBytes: f.fileBytes,
+        manifest: f.manifest,
+        publisher: f.publisher,
+        onChainRecord: f.releaseRecord,
+        trustSource: "DEMO_FIXTURE",
+      });
 
-    let artA: ArtifactProfile;
-    let artB: ArtifactProfile;
-
-    if (presetKey === "same-name-different-hash") {
-      artA = {
-        id: "art-authentic-ubuntu",
-        fileName: authenticUbuntu.fileName,
-        fileSize: authenticUbuntu.fileBytes.byteLength,
-        sha256: authenticUbuntu.manifest.sha256,
-        manifest: authenticUbuntu.manifest,
-        releaseRecord: authenticUbuntu.releaseRecord,
-        isDemo: true,
-      };
-      artB = {
-        id: "art-repack-untrusted",
-        fileName: repackedUbuntu.fileName,
-        fileSize: repackedUbuntu.fileBytes.byteLength,
-        sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        isDemo: true,
-      };
-    } else if (presetKey === "bit-rot-tampered") {
-      artA = {
-        id: "art-authentic-ubuntu",
-        fileName: authenticUbuntu.fileName,
-        fileSize: authenticUbuntu.fileBytes.byteLength,
-        sha256: authenticUbuntu.manifest.sha256,
-        manifest: authenticUbuntu.manifest,
-        releaseRecord: authenticUbuntu.releaseRecord,
-        isDemo: true,
-      };
-      artB = {
-        id: "art-tampered-ubuntu",
-        fileName: tamperedUbuntu.fileName,
-        fileSize: tamperedUbuntu.fileBytes.byteLength,
-        sha256: "b45a6c112233445566778899aabbccddeeff00112233445566778899aabbccdd",
-        manifest: {
-          ...tamperedUbuntu.manifest,
-          chunkHashes: [
-            "diff_chunk_0",
-            ...(tamperedUbuntu.manifest.chunkHashes?.slice(1) ?? []),
-          ],
-        },
-        releaseRecord: tamperedUbuntu.releaseRecord,
-        isDemo: true,
-      };
-    } else if (presetKey === "revoked-evolution") {
-      artA = {
-        id: "art-superseded-v0.1.0",
-        fileName: supersededMonad.fileName,
-        fileSize: supersededMonad.fileBytes.byteLength,
-        sha256: supersededMonad.manifest.sha256,
-        manifest: supersededMonad.manifest,
-        releaseRecord: supersededMonad.releaseRecord,
-        isDemo: true,
-      };
-      artB = {
-        id: "art-revoked-v0.2.1",
-        fileName: revokedMonad.fileName,
-        fileSize: revokedMonad.fileBytes.byteLength,
-        sha256: revokedMonad.manifest.sha256,
-        manifest: revokedMonad.manifest,
-        releaseRecord: revokedMonad.releaseRecord,
-        isDemo: true,
-      };
-    } else {
-      // Exact Match
-      artA = {
-        id: "art-canonical-node",
-        fileName: authenticUbuntu.fileName,
-        fileSize: authenticUbuntu.fileBytes.byteLength,
-        sha256: authenticUbuntu.manifest.sha256,
-        manifest: authenticUbuntu.manifest,
-        releaseRecord: authenticUbuntu.releaseRecord,
-        isDemo: true,
-      };
-      artB = {
-        id: "art-mirror-node",
-        fileName: authenticUbuntu.fileName,
-        fileSize: authenticUbuntu.fileBytes.byteLength,
-        sha256: authenticUbuntu.manifest.sha256,
-        manifest: authenticUbuntu.manifest,
-        releaseRecord: authenticUbuntu.releaseRecord,
-        isDemo: true,
-      };
-    }
+    const [artA, artB] =
+      presetKey === "same-name-different-hash"
+        ? await Promise.all([profile(authentic, "art-authentic-ubuntu"), profile(repacked, "art-repack-untrusted")])
+        : presetKey === "bit-rot-tampered"
+        ? await Promise.all([profile(authentic, "art-authentic-ubuntu"), profile(tampered, "art-tampered-ubuntu")])
+        : presetKey === "revoked-evolution"
+        ? await Promise.all([profile(superseded, "art-superseded-v0.1.0"), profile(revoked, "art-revoked-v0.2.1")])
+        : await Promise.all([profile(authentic, "art-canonical-node"), profile(authentic, "art-mirror-node")]);
 
     setArtifactA(artA);
     setArtifactB(artB);
@@ -182,64 +117,49 @@ export function VariantComparator() {
     manifestText: string,
     hashOrDigest: string
   ): Promise<ArtifactProfile> {
-    let sha256 = "";
-    let fileName = label;
-    let fileSize = 0;
-    let manifestData = undefined;
-    let manifestDigest: string | undefined;
-
-    if (file) {
-      const buffer = await file.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-      sha256 = await sha256Bytes(bytes);
-      fileName = file.name;
-      fileSize = bytes.byteLength;
-    }
+    const id = `live-${label.toLowerCase().replace(/\s+/g, "-")}`;
+    const fileBytes = file ? new Uint8Array(await file.arrayBuffer()) : undefined;
 
     if (manifestText.trim()) {
       const parsed = await parseAndValidateManifest(manifestText);
-      if (parsed.valid) {
-        manifestData = parsed.manifest;
-        manifestDigest = parsed.manifestDigest;
-        if (!sha256) sha256 = parsed.manifest.sha256;
-        if (fileName === label) fileName = parsed.manifest.fileName;
-        if (!fileSize) fileSize = parsed.manifest.fileSize;
+      if (!parsed.valid) {
+        throw new Error(`${label}: ${parsed.message}`);
       }
+      // Publisher key and release record come from the registry, never from the manifest.
+      const anchors = await resolveRegistryTrustAnchors(parsed.manifest, parsed.manifestDigest);
+      return buildArtifactProfile({
+        id,
+        fileName: file?.name ?? parsed.manifest.fileName,
+        fileBytes,
+        manifest: parsed.manifest,
+        publisher: anchors.publisher,
+        onChainRecord: anchors.releaseRecord,
+        trustSource: "MONAD_TESTNET",
+      });
     }
 
-    const cleanInput = hashOrDigest.trim().toLowerCase();
-    if (!sha256 && cleanInput) {
-      sha256 = cleanInput.replace(/^0x/, "");
-      fileName = `${label} (${sha256.slice(0, 8)}...)`;
+    if (fileBytes) {
+      return buildArtifactProfile({ id, fileName: file!.name, fileBytes });
     }
 
-    if (!sha256) {
-      throw new Error(`Please provide a file, manifest, or hash for ${label}.`);
+    // Only a hash/digest was typed: try it as an exact release digest.
+    const cleanInput = hashOrDigest.trim().toLowerCase().replace(/^0x/, "");
+    if (!/^[0-9a-f]{64}$/.test(cleanInput)) {
+      throw new Error(`Please provide a file, manifest, or 64-character hash for ${label}.`);
     }
-
-    // Release records are resolved by exact release digest only: from the manifest when
-    // one is supplied, otherwise by treating the typed value as a release digest.
-    // Bare file-hash lookups are not used because they are not scoped to a publisher.
-    let releaseRecord = undefined;
+    let record: ReleaseRecord | null = null;
     try {
-      if (manifestData && manifestDigest) {
-        const anchors = await resolveRegistryTrustAnchors(manifestData, manifestDigest);
-        releaseRecord = anchors.releaseRecord ?? undefined;
-      } else if (cleanInput) {
-        const formatted = ("0x" + cleanInput.replace(/^0x/, "")) as `0x${string}`;
-        releaseRecord = (await fetchOnChainRelease(formatted)) ?? undefined;
-      }
+      record = await fetchOnChainRelease(`0x${cleanInput}`);
     } catch {
-      // Registry unreachable: compare without on-chain status
+      // Registry unreachable: compare by hash only
     }
-
     return {
-      id: `live-${label.toLowerCase().replace(/\s+/g, "-")}`,
-      fileName,
-      fileSize,
-      sha256: sha256.replace(/^0x/, ""),
-      manifest: manifestData,
-      releaseRecord,
+      id,
+      fileName: `${label} (${cleanInput.slice(0, 8)}...)`,
+      fileSize: 0,
+      sha256: record ? record.fileHash.replace(/^0x/, "") : cleanInput,
+      releaseRecord: record ?? undefined,
+      authenticated: false,
       isDemo: false,
     };
   }
@@ -287,7 +207,7 @@ export function VariantComparator() {
           type="button"
           onClick={() => {
             setMode("demo");
-            applyPreset("same-name-different-hash");
+            void applyPreset("same-name-different-hash");
           }}
           className={`px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all ${
             mode === "demo"
@@ -326,7 +246,7 @@ export function VariantComparator() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => applyPreset("same-name-different-hash")}
+              onClick={() => void applyPreset("same-name-different-hash")}
               className={`px-3 py-1.5 rounded text-xs transition-all ${
                 activePreset === "same-name-different-hash"
                   ? "bg-neutral-950 text-white font-medium shadow-sm"
@@ -338,7 +258,7 @@ export function VariantComparator() {
 
             <button
               type="button"
-              onClick={() => applyPreset("bit-rot-tampered")}
+              onClick={() => void applyPreset("bit-rot-tampered")}
               className={`px-3 py-1.5 rounded text-xs transition-all ${
                 activePreset === "bit-rot-tampered"
                   ? "bg-neutral-950 text-white font-medium shadow-sm"
@@ -350,7 +270,7 @@ export function VariantComparator() {
 
             <button
               type="button"
-              onClick={() => applyPreset("revoked-evolution")}
+              onClick={() => void applyPreset("revoked-evolution")}
               className={`px-3 py-1.5 rounded text-xs transition-all ${
                 activePreset === "revoked-evolution"
                   ? "bg-neutral-950 text-white font-medium shadow-sm"
@@ -362,7 +282,7 @@ export function VariantComparator() {
 
             <button
               type="button"
-              onClick={() => applyPreset("exact-match")}
+              onClick={() => void applyPreset("exact-match")}
               className={`px-3 py-1.5 rounded text-xs transition-all ${
                 activePreset === "exact-match"
                   ? "bg-neutral-950 text-white font-medium shadow-sm"
@@ -390,7 +310,7 @@ export function VariantComparator() {
                 type="button"
                 onClick={() => {
                   setMode("demo");
-                  applyPreset("same-name-different-hash");
+                  void applyPreset("same-name-different-hash");
                 }}
                 className="text-neutral-950 font-bold underline hover:no-underline"
               >
@@ -522,6 +442,16 @@ export function VariantComparator() {
                     Demo data
                   </span>
                 )}
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded border font-mono ${
+                    artifactA.authenticated
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      : "bg-neutral-100 text-neutral-600 border-neutral-200"
+                  }`}
+                  title="Whether the manifest signature verified against the publisher's registered key"
+                >
+                  {artifactA.authenticated ? "Authenticated" : "Unauthenticated"}
+                </span>
                 <span className="text-[10px] bg-neutral-950 text-white px-2 py-0.5 rounded font-mono font-medium">
                   {artifactA.releaseRecord?.status ?? "UNKNOWN"}
                 </span>
@@ -534,7 +464,7 @@ export function VariantComparator() {
                 Size: <span className="text-neutral-950 font-medium">{formatBytes(artifactA.fileSize)}</span>
               </div>
               <div className="text-neutral-600 truncate">
-                Publisher: <span className="text-neutral-950 font-semibold">{artifactA.manifest?.publisherId ?? "Unregistered"}</span>
+                Publisher: <span className="text-neutral-950 font-semibold">{artifactA.manifest?.publisherId ?? "Unknown"}{artifactA.manifest && !artifactA.authenticated ? " (claimed)" : ""}</span>
               </div>
               <div className="flex items-center justify-between p-2.5 rounded bg-neutral-50 border border-neutral-200 font-mono text-[11px] gap-2">
                 <span className="truncate text-neutral-800">SHA: {artifactA.sha256}</span>
@@ -562,6 +492,16 @@ export function VariantComparator() {
                     Demo data
                   </span>
                 )}
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded border font-mono ${
+                    artifactB.authenticated
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      : "bg-neutral-100 text-neutral-600 border-neutral-200"
+                  }`}
+                  title="Whether the manifest signature verified against the publisher's registered key"
+                >
+                  {artifactB.authenticated ? "Authenticated" : "Unauthenticated"}
+                </span>
                 <span className="text-[10px] bg-neutral-950 text-white px-2 py-0.5 rounded font-mono font-medium">
                   {artifactB.releaseRecord?.status ?? "UNKNOWN"}
                 </span>
@@ -574,7 +514,7 @@ export function VariantComparator() {
                 Size: <span className="text-neutral-950 font-medium">{formatBytes(artifactB.fileSize)}</span>
               </div>
               <div className="text-neutral-600 truncate">
-                Publisher: <span className="text-neutral-950 font-semibold">{artifactB.manifest?.publisherId ?? "Unregistered"}</span>
+                Publisher: <span className="text-neutral-950 font-semibold">{artifactB.manifest?.publisherId ?? "Unknown"}{artifactB.manifest && !artifactB.authenticated ? " (claimed)" : ""}</span>
               </div>
               <div className="flex items-center justify-between p-2.5 rounded bg-neutral-50 border border-neutral-200 font-mono text-[11px] gap-2">
                 <span className="truncate text-neutral-800">SHA: {artifactB.sha256}</span>
@@ -658,7 +598,11 @@ export function VariantComparator() {
                         <td className="py-2.5 px-3 text-right">
                           {comparison.diff.publisherMatch ? (
                             <span className="text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                              Identical Publisher
+                              Same publisher (authenticated)
+                            </span>
+                          ) : comparison.diff.claimedPublisherMatch ? (
+                            <span className="text-neutral-700 font-semibold bg-neutral-100 px-2 py-0.5 rounded border border-neutral-200">
+                              Same name claimed, not verified
                             </span>
                           ) : (
                             <span className="text-amber-800 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
