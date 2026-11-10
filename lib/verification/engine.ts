@@ -1,4 +1,4 @@
-import { sha256Bytes } from "../crypto/hashing";
+import { hashSource, type FileDigest } from "../crypto/stream-hash";
 import { canonicalizeRfc8785 } from "../crypto/canonicalize";
 import { computeManifestDigest, verifyManifestSignature } from "../manifests/manifest";
 import type {
@@ -15,7 +15,13 @@ import type {
 } from "./types";
 
 export interface VerifyFileOptions {
-  fileBytes: Uint8Array;
+  /** File contents held in memory (fixtures, tests). Provide this or `fileDigest`. */
+  fileBytes?: Uint8Array;
+  /**
+   * Digest computed elsewhere, e.g. streamed in a Web Worker via `hashFile`, so large files
+   * never need to be loaded into memory. Piece hashes must use the manifest's chunkSize.
+   */
+  fileDigest?: FileDigest;
   fileName: string;
   manifest: SignedReleaseManifest;
   /**
@@ -167,6 +173,16 @@ export async function verifyFileAgainstManifest(
     networkError,
     trustSource = "MONAD_TESTNET",
   } = options;
+  const manifestChunkSize =
+    typeof manifest.chunkSize === "number" && Number.isSafeInteger(manifest.chunkSize) && manifest.chunkSize > 0
+      ? manifest.chunkSize
+      : undefined;
+  let fileDigest = options.fileDigest;
+  if (!fileDigest) {
+    if (!fileBytes) throw new Error("verifyFileAgainstManifest requires fileBytes or fileDigest");
+    fileDigest = await hashSource(fileBytes, { chunkSize: manifestChunkSize });
+  }
+  const fileSizeActual = fileDigest.size;
   const isDemo = trustSource === "DEMO_FIXTURE";
   const registryLabel = isDemo ? "the demo registry" : "Monad Testnet";
 
@@ -185,91 +201,82 @@ export async function verifyFileAgainstManifest(
   const { signatureResult, boundRecord } = auth;
   explanations.push(...auth.explanations);
 
-  // 4. Compute Whole-File SHA-256
-  const computedSha256 = await sha256Bytes(fileBytes);
+  // 4. Whole-file SHA-256
+  const computedSha256 = fileDigest.sha256.toLowerCase();
   const expectedSha256 = strip0x(manifest.sha256);
   const isHashMatch = computedSha256 === expectedSha256;
 
   // Declared size vs actual size (a size difference alone proves the bytes differ)
-  const isSizeMatch = manifest.fileSize === fileBytes.byteLength;
+  const isSizeMatch = manifest.fileSize === fileSizeActual;
   if (!isSizeMatch) {
     explanations.push(
-      `File size is ${fileBytes.byteLength} bytes, but the manifest declares ${manifest.fileSize} bytes (${
-        fileBytes.byteLength > manifest.fileSize ? "+" : ""
-      }${fileBytes.byteLength - manifest.fileSize} bytes).`
+      `File size is ${fileSizeActual} bytes, but the manifest declares ${manifest.fileSize} bytes (${
+        fileSizeActual > manifest.fileSize ? "+" : ""
+      }${fileSizeActual - manifest.fileSize} bytes).`
     );
   }
 
-  // 5. Piece/Chunk Verification ONLY when manifest provides valid and complete chunk metadata
+  // 5. Piece verification, only when the manifest provides complete piece metadata.
+  //    Piece layout follows the size the publisher declared, so pieces can still be
+  //    compared (and missing/extra bytes localized) when the local file changed length.
   let chunkDetails: ChunkIntegrityResult[] | undefined;
   let chunksMatched = 0;
   let chunksTotal = 0;
 
   const hasChunkMeta =
-    typeof manifest.chunkSize === "number" &&
-    manifest.chunkSize > 0 &&
-    Array.isArray(manifest.chunkHashes) &&
-    manifest.chunkHashes.length > 0;
-
-  // Chunk layout follows the size the publisher declared, so pieces can still be
-  // compared (and missing/extra bytes localized) when the local file changed length.
-  const expectedChunkCount =
-    manifest.chunkSize && manifest.chunkSize > 0
-      ? manifest.fileSize === 0
-        ? 0
-        : Math.ceil(manifest.fileSize / manifest.chunkSize)
-      : -1;
-
+    manifestChunkSize !== undefined && Array.isArray(manifest.chunkHashes) && manifest.chunkHashes.length > 0;
+  const expectedChunkCount = manifestChunkSize
+    ? manifest.fileSize === 0
+      ? 0
+      : Math.ceil(manifest.fileSize / manifestChunkSize)
+    : -1;
   const isChunkMetaComplete =
     hasChunkMeta &&
     manifest.chunkHashes!.length === expectedChunkCount &&
-    manifest.chunkHashes!.every(
-      (h) => typeof h === "string" && /^[0-9a-fA-F]{64}$/.test(h.replace(/^0x/, ""))
-    );
+    manifest.chunkHashes!.every((h) => typeof h === "string" && /^[0-9a-f]{64}$/.test(strip0x(h)));
 
   if (hasChunkMeta && !isChunkMetaComplete) {
     explanations.push(
       `Chunk verification skipped: Manifest chunk metadata is incomplete or inconsistent with the declared file size (${manifest.chunkHashes?.length ?? 0} chunk hashes provided, expected ${expectedChunkCount}).`
     );
-  } else if (isChunkMetaComplete && manifest.chunkSize) {
-    chunksTotal = manifest.chunkHashes!.length;
-    chunkDetails = [];
-    const chunkSize = manifest.chunkSize;
-
-    for (let i = 0; i < chunksTotal; i++) {
-      const byteStart = i * chunkSize;
-      const byteEnd = Math.min(byteStart + chunkSize, manifest.fileSize, fileBytes.byteLength);
-      const pieceSlice = fileBytes.subarray(Math.min(byteStart, fileBytes.byteLength), Math.max(byteEnd, byteStart));
-      const pieceHash = await sha256Bytes(pieceSlice);
-      const expectedPieceHash = manifest.chunkHashes![i].toLowerCase().replace(/^0x/, "");
-
-      const pieceMatch = pieceHash === expectedPieceHash;
-      if (pieceMatch) chunksMatched++;
-
-      chunkDetails.push({
-        chunkIndex: i,
-        byteStart,
-        byteEnd,
-        computedSha256: pieceHash,
-        expectedSha256: expectedPieceHash,
-        status: pieceMatch ? "MATCH" : "MISMATCH",
-      });
-    }
-
-    explanations.push(
-      `Chunk verification: ${chunksMatched} of ${chunksTotal} pieces match the publisher manifest.`
-    );
-    if (fileBytes.byteLength > manifest.fileSize) {
+  } else if (isChunkMetaComplete && manifestChunkSize) {
+    if (fileDigest.chunkSize !== manifestChunkSize || !fileDigest.chunkHashes) {
+      explanations.push("Chunk verification skipped: local piece hashes were not computed with the manifest's chunk size.");
+    } else {
+      chunksTotal = manifest.chunkHashes!.length;
+      chunkDetails = [];
+      for (let i = 0; i < chunksTotal; i++) {
+        const byteStart = i * manifestChunkSize;
+        const byteEnd = Math.min(byteStart + manifestChunkSize, manifest.fileSize);
+        // A piece missing locally (file shorter than declared) never matches.
+        const pieceHash = fileDigest.chunkHashes[i] ?? "";
+        const expectedPieceHash = strip0x(manifest.chunkHashes![i]);
+        const pieceMatch = pieceHash === expectedPieceHash;
+        if (pieceMatch) chunksMatched++;
+        chunkDetails.push({
+          chunkIndex: i,
+          byteStart,
+          byteEnd,
+          computedSha256: pieceHash,
+          expectedSha256: expectedPieceHash,
+          status: pieceMatch ? "MATCH" : "MISMATCH",
+        });
+      }
       explanations.push(
-        `${fileBytes.byteLength - manifest.fileSize} trailing bytes beyond the declared size are not covered by any manifest piece.`
+        `Chunk verification: ${chunksMatched} of ${chunksTotal} pieces match the publisher manifest.`
       );
+      if (fileSizeActual > manifest.fileSize) {
+        explanations.push(
+          `${fileSizeActual - manifest.fileSize} trailing bytes beyond the declared size are not covered by any manifest piece.`
+        );
+      }
     }
   }
 
   const fileIntegrity: FileIntegrityResult = {
     status: isHashMatch ? "MATCH" : "MISMATCH",
     fileName,
-    fileSize: fileBytes.byteLength,
+    fileSize: fileSizeActual,
     expectedFileSize: manifest.fileSize,
     computedSha256,
     expectedSha256,

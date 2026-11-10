@@ -1,4 +1,4 @@
-import { sha256Bytes, hashChunks } from "../crypto/hashing";
+import { hashSource, type FileDigest } from "../crypto/stream-hash";
 import { authenticateManifest } from "../verification/engine";
 import type {
   SignedReleaseManifest,
@@ -11,8 +11,10 @@ import type { ArtifactProfile } from "./release-dna";
 export interface BuildArtifactProfileParams {
   id: string;
   fileName: string;
-  /** Local file bytes. When absent, size and hash are taken from the manifest. */
+  /** Local file bytes (small, in memory). */
   fileBytes?: Uint8Array;
+  /** Digest streamed elsewhere (e.g. `hashFile` in a worker), with the manifest's chunk size. */
+  fileDigest?: FileDigest;
   manifest?: SignedReleaseManifest;
   /** Registry entry for the manifest's publisherId */
   publisher?: RegistryPublisher | null;
@@ -31,24 +33,28 @@ export async function buildArtifactProfile(
   params: BuildArtifactProfileParams
 ): Promise<ArtifactProfile> {
   const { id, fileName, fileBytes, manifest, publisher, onChainRecord, trustSource } = params;
+  const chunkSize =
+    manifest?.chunkSize && Number.isSafeInteger(manifest.chunkSize) && manifest.chunkSize > 0
+      ? manifest.chunkSize
+      : undefined;
+  const digest =
+    params.fileDigest ?? (fileBytes ? await hashSource(fileBytes, { chunkSize }) : undefined);
 
   let sha256 = manifest?.sha256.toLowerCase().replace(/^0x/, "") ?? "";
   let fileSize = manifest?.fileSize ?? 0;
   let computedChunkHashes: string[] | undefined;
 
-  if (fileBytes) {
-    sha256 = await sha256Bytes(fileBytes);
-    fileSize = fileBytes.byteLength;
-    if (manifest?.chunkSize && Number.isInteger(manifest.chunkSize) && manifest.chunkSize > 0) {
-      computedChunkHashes = (await hashChunks(fileBytes, manifest.chunkSize)).chunkHashes;
-    }
+  if (digest) {
+    sha256 = digest.sha256;
+    fileSize = digest.size;
+    computedChunkHashes = digest.chunkHashes;
   }
 
   let authenticated = false;
   let releaseRecord: ReleaseRecord | undefined;
   if (manifest) {
     const auth = await authenticateManifest({ manifest, publisher, onChainRecord, trustSource });
-    const fileMatchesManifest = !fileBytes || sha256 === manifest.sha256.toLowerCase().replace(/^0x/, "");
+    const fileMatchesManifest = !digest || sha256 === manifest.sha256.toLowerCase().replace(/^0x/, "");
     authenticated = auth.signatureResult.isValid && fileMatchesManifest;
     releaseRecord = fileMatchesManifest ? auth.boundRecord ?? undefined : undefined;
   }

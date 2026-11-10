@@ -8,7 +8,7 @@ The application computes file digests locally in the browser, checks detached Ed
 
 ## What it does
 
-- **Local file hashing:** Computes full-file SHA-256 digests and piece-level chunk hashes entirely in the browser using the Web Crypto API. File contents are never uploaded to a server.
+- **Local file hashing:** Computes full-file SHA-256 digests and piece-level chunk hashes entirely in the browser, streaming the file in a Web Worker so multi-GB files never need to fit in memory. File contents are never uploaded to a server.
 - **Detached signature verification:** Validates publisher Ed25519 signatures against RFC 8785 JSON Canonicalization Scheme (JCS) release manifests.
 - **Piece-level tamper localization:** Matches individual piece hashes against manifest declarations to pinpoint altered or corrupted byte ranges.
 - **On-chain release commitments:** Queries an EVM registry contract on Monad Testnet for publisher authorization, version lineage, and revocation status.
@@ -197,7 +197,7 @@ The demo does not require a Web3 wallet, testnet gas, or external API keys. It r
 
 - **No live BitTorrent client:** The application does not connect to the BitTorrent wire protocol (TCP/uTP peer connections) or scrape active swarms. Piece integrity is verified against chunk hashes declared in the manifest.
 - **No integrated malware scanner:** The tool does not submit files to VirusTotal or execute dynamic sandbox analysis. External scanner status is honestly reported as unavailable.
-- **Browser memory constraints:** Files are processed in memory through the browser's Web Crypto API. Files larger than approximately 2 GB may encounter browser memory limits.
+- **Hashing speed:** Files are streamed from disk and hashed incrementally in a Web Worker (8 MiB at a time), so memory use stays flat regardless of file size. Very large files still take time to hash; progress is shown while hashing.
 - **On-chain registry state:** While the `SwarmTraceRegistry` contract is deployed on Monad Testnet, live publisher accounts and production software releases have not yet been registered on-chain. The publisher portal allows submitting transactions, but pre-seeded scenarios rely on local fixtures.
 - **Deployment:** The application is configured and verified for local execution; it is not currently deployed to a public hosting URL.
 

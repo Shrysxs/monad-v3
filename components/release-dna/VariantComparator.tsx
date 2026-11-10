@@ -24,6 +24,7 @@ import {
   type DemoFixtureItem,
 } from "@/lib/demo-data/fixtures";
 import { buildArtifactProfile } from "@/lib/risk/artifact-profile";
+import { hashFile } from "@/lib/crypto/hash-file";
 import type { ReleaseRecord } from "@/lib/verification/types";
 import { parseAndValidateManifest } from "@/lib/manifests/manifest";
 import {
@@ -118,19 +119,25 @@ export function VariantComparator() {
     hashOrDigest: string
   ): Promise<ArtifactProfile> {
     const id = `live-${label.toLowerCase().replace(/\s+/g, "-")}`;
-    const fileBytes = file ? new Uint8Array(await file.arrayBuffer()) : undefined;
-
+    let parsed: Awaited<ReturnType<typeof parseAndValidateManifest>> | null = null;
     if (manifestText.trim()) {
-      const parsed = await parseAndValidateManifest(manifestText);
+      parsed = await parseAndValidateManifest(manifestText);
       if (!parsed.valid) {
         throw new Error(`${label}: ${parsed.message}`);
       }
+    }
+    // Stream the file in a worker, with the manifest's piece size when there is one.
+    const chunkSize =
+      parsed?.valid && Number.isSafeInteger(parsed.manifest.chunkSize) ? parsed.manifest.chunkSize : undefined;
+    const fileDigest = file ? await hashFile(file, { chunkSize }) : undefined;
+
+    if (parsed?.valid) {
       // Publisher key and release record come from the registry, never from the manifest.
       const anchors = await resolveRegistryTrustAnchors(parsed.manifest, parsed.manifestDigest);
       return buildArtifactProfile({
         id,
         fileName: file?.name ?? parsed.manifest.fileName,
-        fileBytes,
+        fileDigest,
         manifest: parsed.manifest,
         publisher: anchors.publisher,
         onChainRecord: anchors.releaseRecord,
@@ -138,8 +145,8 @@ export function VariantComparator() {
       });
     }
 
-    if (fileBytes) {
-      return buildArtifactProfile({ id, fileName: file!.name, fileBytes });
+    if (fileDigest) {
+      return buildArtifactProfile({ id, fileName: file!.name, fileDigest });
     }
 
     // Only a hash/digest was typed: try it as an exact release digest.

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   KeyRound,
   UserCog,
@@ -30,7 +30,7 @@ import {
   fetchOnChainReleaseByFileHash,
   SWARMTRACE_REGISTRY_ABI,
 } from "@/lib/chain/contract";
-import { sha256Bytes } from "@/lib/crypto/hashing";
+import { hashFile } from "@/lib/crypto/hash-file";
 import {
   createSignedManifest,
   computeManifestDigest,
@@ -45,6 +45,8 @@ import type {
 } from "@/lib/verification/types";
 
 const MONAD_CHAIN_ID = 10143;
+/** Piece size recorded in authored manifests (4 MiB) */
+const MANIFEST_PIECE_SIZE = 4 * 1024 * 1024;
 const ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -115,6 +117,12 @@ export function PublisherPortal() {
   const [manifestGenSignedJson, setManifestGenSignedJson] = useState<string>("");
   const [manifestGenDigest, setManifestGenDigest] = useState<string>("");
   const [isHashingFile, setIsHashingFile] = useState<boolean>(false);
+  const [hashProgress, setHashProgress] = useState<number>(0);
+  const lastHashedSha256 = useRef<string>("");
+  // Piece hashes of the hashed file (enables tamper localization for downloaders)
+  const [manifestGenChunks, setManifestGenChunks] = useState<{ chunkSize: number; chunkHashes: string[] } | null>(
+    null
+  );
   const [manifestSignError, setManifestSignError] = useState<string | null>(null);
   const [manifestSignSuccess, setManifestSignSuccess] = useState<string | null>(null);
 
@@ -345,14 +353,19 @@ export function PublisherPortal() {
     const file = e.target.files?.[0];
     if (!file) return;
     setIsHashingFile(true);
+    setHashProgress(0);
     setManifestSignError(null);
     try {
-      const buffer = await file.arrayBuffer();
-      const hash = await sha256Bytes(new Uint8Array(buffer));
+      // Streamed in a Web Worker: large release artifacts are never loaded into memory whole.
+      const digest = await hashFile(file, { chunkSize: MANIFEST_PIECE_SIZE, onProgress: setHashProgress });
       setManifestGenFileName(file.name);
-      setManifestGenFileSize(file.size);
-      setManifestGenSha256(hash);
-      setManifestSignSuccess(`Hashed file "${file.name}" (${file.size} bytes) via Web Crypto SHA-256.`);
+      setManifestGenFileSize(digest.size);
+      setManifestGenSha256(digest.sha256);
+      lastHashedSha256.current = digest.sha256;
+      setManifestGenChunks({ chunkSize: MANIFEST_PIECE_SIZE, chunkHashes: digest.chunkHashes ?? [] });
+      setManifestSignSuccess(
+        `Hashed "${file.name}" (${digest.size} bytes, ${digest.chunkHashes?.length ?? 0} pieces of ${MANIFEST_PIECE_SIZE / 1048576} MiB).`
+      );
     } catch (err: any) {
       setManifestSignError("Failed to hash selected file: " + (err.message || String(err)));
     } finally {
@@ -386,6 +399,11 @@ export function PublisherPortal() {
         fileSize: Number(manifestGenFileSize),
         sha256: manifestGenSha256.trim().toLowerCase().replace(/^0x/, ""),
         publisherKeyId: manifestGenKeyId.trim(),
+        // Piece hashes only describe the file that was hashed; drop them if the digest was edited by hand.
+        ...(manifestGenChunks &&
+        manifestGenSha256.trim().toLowerCase().replace(/^0x/, "") === lastHashedSha256.current
+          ? manifestGenChunks
+          : {}),
       };
 
       const signed = await createSignedManifest(payload, cleanKey);
@@ -877,8 +895,14 @@ export function PublisherPortal() {
               <input
                 type="file"
                 onChange={handleFileSelectedForManifest}
+                disabled={isHashingFile}
                 className="w-full text-xs text-neutral-600 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border file:border-neutral-300 file:text-xs file:bg-white file:text-neutral-900 hover:file:bg-neutral-50 cursor-pointer"
               />
+              {isHashingFile && (
+                <div className="mt-1.5 text-[11px] font-mono text-neutral-600">
+                  Hashing locally... {Math.floor(hashProgress * 100)}%
+                </div>
+              )}
             </div>
             <div>
               <label className="text-neutral-700 font-medium block mb-1">Publisher Key ID:</label>

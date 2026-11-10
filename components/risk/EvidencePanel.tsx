@@ -21,6 +21,7 @@ import { getDemoFixtures, type DemoFixtureItem } from "@/lib/demo-data/fixtures"
 import { parseAndValidateManifest } from "@/lib/manifests/manifest";
 import { resolveRegistryTrustAnchors } from "@/lib/chain/contract";
 import { verifyFileAgainstManifest } from "@/lib/verification/engine";
+import { hashFile } from "@/lib/crypto/hash-file";
 import type { EvidenceFinding } from "@/lib/verification/types";
 
 export function EvidencePanel() {
@@ -111,8 +112,9 @@ export function EvidencePanel() {
 
       // Publisher key and release record come only from the Monad registry.
       const anchors = await resolveRegistryTrustAnchors(parsed.manifest, parsed.manifestDigest);
+      const chunkSize = Number.isSafeInteger(parsed.manifest.chunkSize) ? parsed.manifest.chunkSize : undefined;
       const verdict = await verifyFileAgainstManifest({
-        fileBytes: new Uint8Array(await customFile.arrayBuffer()),
+        fileDigest: await hashFile(customFile, { chunkSize }),
         fileName: customFile.name,
         manifest: parsed.manifest,
         publisher: anchors.publisher,
