@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, Play } from "lucide-react";
+import { ThemeToggle } from "./ThemeToggle";
 
 const NAV_ITEMS = [
   { href: "/verify", label: "Check a file" },
@@ -51,6 +52,7 @@ export function Header() {
             <Play className="w-3.5 h-3.5 fill-current" />
             Try the demo
           </Link>
+          <ThemeToggle />
           <button
             type="button"
             onClick={() => setOpen(!open)}

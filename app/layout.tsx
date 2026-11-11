@@ -15,13 +15,19 @@ export const metadata: Metadata = {
   },
 };
 
+// Runs before paint: apply the saved theme, or follow the system setting.
+const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("theme");var d=t?t==="dark":window.matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.classList.add("dark")}catch(e){}})()`;
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="bg-white text-neutral-950 min-h-screen flex flex-col antialiased selection:bg-neutral-950 selection:text-white">
         <Header />
         <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-10">
