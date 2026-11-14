@@ -65,9 +65,9 @@ This creates an independently verifiable public ledger of release history that a
 
 ## Tech stack
 
-- **Frontend:** Next.js 15 (App Router), React 19, TypeScript 5.7, Tailwind CSS, Lucide icons
+- **Frontend:** Next.js 15 (App Router), React 19, TypeScript 5.7, Tailwind CSS (light/dark themes), Lucide icons
 - **Smart Contracts:** Solidity 0.8.28, OpenZeppelin Contracts v5, Foundry (`forge`, `cast`)
-- **Web3 Integration:** `viem` 2.23, `wagmi` 2.14
+- **Web3 Integration:** `viem` 2.23 (browser wallet via EIP-1193, no wagmi)
 - **Cryptography:**
   - Web Crypto API (`crypto.subtle.digest("SHA-256")`) for in-browser file hashing
   - `@noble/curves` (`ed25519`) for Ed25519 signature verification
@@ -176,11 +176,14 @@ The repository includes test suites for both frontend cryptographic logic and sm
 npm test
 ```
 
-Runs 54 tests across 6 test suites:
+Runs 79 tests across 9 test suites:
 - `tests/crypto/manifest-crypto.test.ts`: RFC 8785 canonicalization, key ordering, SHA-256 digests, and detached Ed25519 signature verification.
+- `tests/crypto/stream-hash.test.ts`: Incremental (streamed) file hashing matches one-shot SHA-256 and piece hashes.
 - `tests/verification/engine.test.ts`: Local file hashing, piece matching, status outcome resolution, and corrupt chunk isolation.
 - `tests/risk/release-dna.test.ts`: Variant comparison rules, chunk diff calculations, and lineage graph generation.
 - `tests/risk/evidence.test.ts`: Multi-source evidence scoring and honest scanner-unavailable state handling.
+- `tests/risk/artifact-profile.test.ts`: Compare-files profiles built on the same verification engine.
+- `tests/ui/verdict-copy.test.ts`: Plain-language verdict wording (e.g. a matching file is never shown as good when the signature is fake).
 - `tests/integration/e2e-verification.test.ts`: Full verification path linking file bytes, manifests, signatures, and registry records.
 - `tests/demo-data/fixtures.test.ts`: Integrity and cryptographic consistency of sample fixtures.
 
@@ -217,6 +220,8 @@ npm run lint        # ESLint verification
 | **Try the demo** (`/demo`) | A four-step story with made-up sample files: a genuine download, a tampered one, a fake with the same name, and a withdrawn release. No wallet or files needed. |
 
 Every page also offers made-up sample files, always labelled "Sample data". Results from samples never claim to come from Monad Testnet.
+
+The old `/risk` page now redirects to `/verify`; the risk report is part of the check result. The interface follows the system light/dark preference, with a toggle in the header.
 
 ## Limitations
 
