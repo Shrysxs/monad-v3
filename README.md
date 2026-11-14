@@ -15,6 +15,34 @@ The application computes file digests locally in the browser, checks detached Ed
 - **Compare files:** Compares two artifacts that share the same filename to determine whether they share an origin, represent distinct builds, or indicate an untrusted repack.
 - **Honest evidence reporting:** Separates publisher identity from runtime safety. When no antivirus or external scanner is configured, the tool reports `SCANNER_UNAVAILABLE` rather than fabricating a clean result.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Browser["Browser (Next.js app)"]
+        UI["Pages<br/>/verify · /dna · /publisher · /demo"]
+        Worker["hash.worker.ts<br/>streamed SHA-256 + piece hashes"]
+        Crypto["lib/crypto<br/>RFC 8785 JCS · Ed25519"]
+        Engine["lib/verification/engine.ts<br/>verdict"]
+        Chain["lib/chain (viem)"]
+    end
+
+    File[("Downloaded file")] --> Worker
+    Manifest[("Signed manifest .json")] --> Crypto
+    Worker --> Engine
+    Crypto --> Engine
+    Chain -->|"publisher key,<br/>release record, status"| Engine
+    Engine --> UI
+
+    Chain <-->|"read: RPC<br/>write: wallet (EIP-1193)"| Registry
+    subgraph Monad["Monad Testnet"]
+        Registry["PenguinTraceRegistry.sol<br/>publishers · releases · revocations"]
+    end
+    Publisher(["Publisher / admin wallet"]) -->|"register · revoke · authorize"| Registry
+```
+
+File bytes never leave the browser; only hashes and IDs are sent to the registry.
+
 ## How verification works
 
 Verification follows these steps:
@@ -54,7 +82,7 @@ Penguin Trace uses Monad Testnet to run an immutable, append-only registry contr
 - Version lineage pointers (`previousReleaseDigest`) to track supersession
 - Permanent revocation flags and explanations
 
-This creates an independently verifiable public ledger of release history that a compromised download mirror cannot retroactively modify. Monad was selected for its EVM compatibility, sub-second block finality, and low transaction costs for recording high-frequency releases.
+This creates an independently verifiable public ledger of release history that a compromised download mirror cannot retroactively modify.
 
 - **Contract Address:** [`0x9E7AF4e6301C7ce483Fe609E130aC845DDD4d1Bc`](https://testnet.monadscan.com/address/0x9E7AF4e6301C7ce483Fe609E130aC845DDD4d1Bc) (`PenguinTraceRegistry`, source verified on Monadscan)
 - **Deployment Transaction:** [`0x615b9da117d0f1ddf37aee1b6e371f8a90d5882cd74d5aa8a809c568db32bde7`](https://testnet.monadscan.com/tx/0x615b9da117d0f1ddf37aee1b6e371f8a90d5882cd74d5aa8a809c568db32bde7) (CREATE2 via CreateX, salt `0x0`)
@@ -119,7 +147,7 @@ NEXT_PUBLIC_MONAD_EXPLORER_URL=https://testnet.monadscan.com
 NEXT_PUBLIC_PENGUINTRACE_REGISTRY_ADDRESS=0x...   # address printed by the deploy script
 ```
 
-With no address set, live registry checks are disabled and every live verification ends in `UNKNOWN_RELEASE`; the demo fixtures still work. The older `NEXT_PUBLIC_SWARMTRACE_REGISTRY_ADDRESS` name is still read as a fallback.
+With no address set, live registry checks are disabled and every live verification ends in `UNKNOWN_RELEASE`; the demo fixtures still work.
 
 *Never store private keys or signing secrets in `.env.local` or any file tracked by version control.*
 
@@ -225,12 +253,7 @@ The old `/risk` page now redirects to `/verify`; the risk report is part of the 
 
 ## Limitations
 
-- **No live BitTorrent client:** The application does not connect to the BitTorrent wire protocol (TCP/uTP peer connections) or scrape active swarms. Piece integrity is verified against chunk hashes declared in the manifest.
 - **No integrated malware scanner:** The tool does not submit files to VirusTotal or execute dynamic sandbox analysis. External scanner status is honestly reported as unavailable.
-- **Hashing speed:** Files are streamed from disk and hashed incrementally in a Web Worker (8 MiB at a time), so memory use stays flat regardless of file size. Very large files still take time to hash; progress is shown while hashing.
-- **On-chain registry state:** While the `PenguinTraceRegistry` contract is deployed on Monad Testnet, live publisher accounts and production software releases have not yet been registered on-chain. The publisher portal allows submitting transactions, but pre-seeded scenarios rely on local fixtures.
-- **Deployment:** The application is configured and verified for local execution; it is not currently deployed to a public hosting URL.
-
-## Project status
-
-Penguin Trace is a working prototype and developer tool. The cryptographic verification engine, RFC 8785 manifest pipeline, Ed25519 signature checks, and smart contract architecture are fully implemented and tested.
+- **Hashing speed:** Very large files take time to hash; progress is shown.
+- **No live releases yet:** The registry is deployed but empty; the demo uses local sample data.
+- **Not hosted:** Runs locally only.
